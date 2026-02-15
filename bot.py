@@ -69,7 +69,8 @@ class InstagramDownloader:
             download_comments=False,
             save_metadata=False,
             compress_json=False,
-            request_timeout=60
+            request_timeout=60,
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
         )
         self._login()
     
@@ -157,7 +158,9 @@ class InstagramDownloader:
         except instaloader.exceptions.QueryReturnedNotFoundException:
             return {"success": False, "error": "Post not found (deleted or private)"}
         except instaloader.exceptions.BadResponseException as e:
-            return {"success": False, "error": f"Instagram API error: {e}\n\nThe post may be deleted, private, or Instagram changed their API."}
+            # Try fallback with yt-dlp
+            print(f"⚠️ Instaloader failed, trying yt-dlp fallback...")
+            return await self._download_with_ytdlp(url, download_id, temp_dir)
         except instaloader.exceptions.ConnectionException as e:
             if "429" in str(e):
                 return {"success": False, "error": "⛔ INSTAGRAM RATE LIMIT (429)\n\nToo many requests. Wait 30-60 minutes."}
@@ -166,6 +169,62 @@ class InstagramDownloader:
             print(f"❌ Download error: {e}")
             traceback.print_exc()
             return {"success": False, "error": f"Error: {str(e)[:200]}"}
+    
+    async def _download_with_ytdlp(self, url: str, download_id: str, temp_dir: Path) -> dict:
+        """Fallback download using yt-dlp when instaloader fails"""
+        try:
+            from yt_dlp import YoutubeDL
+            
+            output_path = str(temp_dir / "%(title)s.%(ext)s")
+            
+            ydl_opts = {
+                'format': 'best[filesize<50M]/bestvideo[filesize<50M]+bestaudio/best',
+                'outtmpl': output_path,
+                'max_filesize': 50 * 1024 * 1024,
+                'noplaylist': True,
+                'cookiesfrombrowser': None,  # Don't use browser cookies
+            }
+            
+            print(f"📥 Downloading with yt-dlp: {url}")
+            
+            with YoutubeDL(ydl_opts) as ydl:
+                info = ydl.extract_info(url, download=True)
+                title = info.get('title', 'instagram_post')
+                uploader = info.get('uploader', 'unknown')
+            
+            files = list(temp_dir.iterdir())
+            if not files:
+                return {"success": False, "error": "yt-dlp download failed - no file created"}
+            
+            # Get the largest file (usually the video)
+            media_files = []
+            for f in files:
+                if f.suffix.lower() in ['.jpg', '.jpeg', '.png', '.mp4', '.mov', '.webp']:
+                    size_mb = f.stat().st_size / (1024 * 1024)
+                    if size_mb <= 50:
+                        media_files.append(str(f))
+                        print(f"  ✓ Found: {f.name} ({size_mb:.1f}MB)")
+            
+            if not media_files:
+                return {"success": False, "error": "No media files found after download"}
+            
+            return {
+                "success": True,
+                "files": media_files,
+                "caption": title[:300] if title else "",
+                "author": uploader if uploader else "unknown",
+                "temp_dir": str(temp_dir)
+            }
+            
+        except Exception as e:
+            print(f"❌ yt-dlp fallback failed: {e}")
+            error_str = str(e)
+            if "inappropriate" in error_str.lower() or "unavailable" in error_str.lower():
+                return {"success": False, "error": "This post is age-restricted or flagged as inappropriate by Instagram.\n\nI cannot download restricted content."}
+            elif "login" in error_str.lower():
+                return {"success": False, "error": "This post requires login to view.\n\nIt may be from a private account or age-restricted."}
+            else:
+                return {"success": False, "error": f"Download failed: {error_str[:100]}\n\nThe post may be deleted, private, or restricted."}
 
 ig_downloader = InstagramDownloader()
 
