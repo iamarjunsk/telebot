@@ -33,6 +33,7 @@ from telegram.ext import (
     filters
 )
 from telegram.constants import ParseMode, ChatAction
+from telegram.helpers import escape_markdown
 
 # Configuration
 BOT_TOKEN = os.getenv("BOT_TOKEN", "")
@@ -379,8 +380,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             author = result.get("author", "unknown")
             
             # Send info
-            info_text = f"📸 *Instagram Post*\n👤 @{author}\n\n{caption[:400] if caption else '_No caption_'}"
-            await update.message.reply_text(info_text, parse_mode=ParseMode.MARKDOWN)
+            safe_caption = escape_markdown(caption[:400] if caption else '_No caption_', version=2)
+            info_text = f"📸 *Instagram Post*\n👤 @{author}\n\n{safe_caption}"
+            await update.message.reply_text(info_text, parse_mode=ParseMode.MARKDOWN_V2)
             
             # Send files
             sent_count = 0
