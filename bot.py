@@ -379,10 +379,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             caption = result.get("caption", "")
             author = result.get("author", "unknown")
             
-            # Send info
-            safe_caption = escape_markdown(caption[:400] if caption else '_No caption_', version=2)
-            info_text = f"📸 *Instagram Post*\n👤 @{author}\n\n{safe_caption}"
-            await update.message.reply_text(info_text, parse_mode=ParseMode.MARKDOWN_V2)
+            # Send info - use HTML to avoid markdown parsing issues
+            import html
+            safe_caption = html.escape(caption[:400] if caption else '<i>No caption</i>')
+            info_text = f"📸 <b>Instagram Post</b>\n👤 @{author}\n\n{safe_caption}"
+            await update.message.reply_text(info_text, parse_mode=ParseMode.HTML)
             
             # Send files
             sent_count = 0
