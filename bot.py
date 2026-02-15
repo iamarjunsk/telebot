@@ -156,6 +156,8 @@ class InstagramDownloader:
             return {"success": False, "error": "Profile not found or private"}
         except instaloader.exceptions.QueryReturnedNotFoundException:
             return {"success": False, "error": "Post not found (deleted or private)"}
+        except instaloader.exceptions.BadResponseException as e:
+            return {"success": False, "error": f"Instagram API error: {e}\n\nThe post may be deleted, private, or Instagram changed their API."}
         except instaloader.exceptions.ConnectionException as e:
             if "429" in str(e):
                 return {"success": False, "error": "⛔ INSTAGRAM RATE LIMIT (429)\n\nToo many requests. Wait 30-60 minutes."}
