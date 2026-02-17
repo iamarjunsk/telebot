@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """
-Instagram & YouTube Downloader Bot - Production Version
-Handles age-restricted content gracefully
+Instagram & YouTube Downloader Bot - With Metadata Error Handling
 """
 
 import os
@@ -57,7 +56,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # ============================================================================
-# INSTAGRAM DOWNLOADER
+# INSTAGRAM DOWNLOADER - WITH FALLBACK
 # ============================================================================
 
 class InstagramDownloader:
@@ -72,11 +71,19 @@ class InstagramDownloader:
             compress_json=False,
             request_timeout=60
         )
+        self.yt_dlp_available = self._check_ytdlp()
         self._login()
+    
+    def _check_ytdlp(self):
+        try:
+            import yt_dlp
+            return True
+        except ImportError:
+            return False
     
     def _login(self):
         if not IG_USERNAME or not IG_PASSWORD:
-            print("⚠️ No IG credentials - anonymous mode (very limited)")
+            print("⚠️ No IG credentials - anonymous mode")
             return
         
         try:
@@ -119,61 +126,115 @@ class InstagramDownloader:
             if not shortcode:
                 return {"success": False, "error": "Invalid Instagram URL"}
             
-            print(f"📥 Downloading: {shortcode}")
+            print(f"📥 Trying instaloader: {shortcode}")
             
-            post = instaloader.Post.from_shortcode(self.L.context, shortcode)
+            # Try instaloader first
+            try:
+                post = instaloader.Post.from_shortcode(self.L.context, shortcode)
+                self.L.dirname_pattern = str(temp_dir)
+                self.L.download_post(post, target=shortcode)
+                
+                files = self._collect_files(temp_dir)
+                if files:
+                    return {
+                        "success": True,
+                        "files": files,
+                        "caption": post.caption[:400] if post.caption else "",
+                        "author": post.owner_username,
+                        "temp_dir": str(temp_dir),
+                        "method": "instaloader"
+                    }
+            except Exception as e:
+                error_str = str(e).lower()
+                print(f"⚠️ Instaloader failed: {e}")
+                
+                # Check if we should try fallback
+                if any(x in error_str for x in ['metadata', '401', '403', '429', 'json', 'query']):
+                    print("🔄 Trying yt-dlp fallback...")
+                else:
+                    raise  # Don't fallback for other errors
             
-            self.L.dirname_pattern = str(temp_dir)
-            self.L.download_post(post, target=shortcode)
+            # Fallback to yt-dlp
+            if self.yt_dlp_available:
+                result = await self._download_with_ytdlp(url, temp_dir)
+                if result.get("success"):
+                    result["temp_dir"] = str(temp_dir)
+                    result["method"] = "yt-dlp"
+                    return result
             
-            files = []
-            for f in temp_dir.iterdir():
-                if f.suffix.lower() in ['.jpg', '.jpeg', '.png', '.mp4', '.mov']:
-                    size_mb = f.stat().st_size / (1024 * 1024)
-                    if size_mb <= 50:
-                        files.append(str(f))
-                        print(f"  ✓ {f.name} ({size_mb:.1f}MB)")
+            # If we get here, both failed
+            return {"success": False, "error": "Failed to download. Post may be private, deleted, or Instagram is blocking downloads."}
+            
+        except Exception as e:
+            error_str = str(e)
+            print(f"❌ Download error: {e}")
+            
+            # Check for specific errors
+            if "metadata" in error_str.lower():
+                return {"success": False, "error": "❌ Cannot fetch post info.\n\nReasons:\n• Post is deleted or private\n• Instagram changed their system\n• Rate limit - wait 30 minutes\n• Try again later"}
+            
+            if any(x in error_str.lower() for x in ['age', 'restricted', 'inappropriate']):
+                return {"success": False, "error": "🔞 Age-restricted content. Cannot download."}
+            
+            return {"success": False, "error": f"Error: {error_str[:150]}"}
+        finally:
+            # Don't cleanup here - let caller do it
+            pass
+    
+    def _collect_files(self, temp_dir: Path) -> list:
+        """Collect media files from directory"""
+        files = []
+        for f in temp_dir.iterdir():
+            if f.suffix.lower() in ['.jpg', '.jpeg', '.png', '.mp4', '.mov', '.webp']:
+                size_mb = f.stat().st_size / (1024 * 1024)
+                if size_mb <= 50:
+                    files.append(str(f))
+                    print(f"  ✓ {f.name} ({size_mb:.1f}MB)")
+        return files
+    
+    async def _download_with_ytdlp(self, url: str, temp_dir: Path) -> dict:
+        """Fallback using yt-dlp"""
+        try:
+            from yt_dlp import YoutubeDL
+            
+            output_path = str(temp_dir / "inst_%(title)s.%(ext)s")
+            
+            ydl_opts = {
+                'format': 'best[filesize<50M]/best',
+                'outtmpl': output_path,
+                'max_filesize': 50 * 1024 * 1024,
+                'noplaylist': True,
+                'quiet': True,
+                'no_warnings': True,
+            }
+            
+            print(f"📥 yt-dlp downloading: {url}")
+            
+            with YoutubeDL(ydl_opts) as ydl:
+                info = ydl.extract_info(url, download=True)
+                title = info.get('title', 'Instagram Post')
+                uploader = info.get('uploader', 'unknown')
+            
+            files = self._collect_files(temp_dir)
             
             if not files:
-                return {"success": False, "error": "No media files found"}
+                return {"success": False, "error": "No files downloaded"}
             
             return {
                 "success": True,
                 "files": files,
-                "caption": post.caption[:400] if post.caption else "",
-                "author": post.owner_username,
-                "temp_dir": str(temp_dir)
+                "caption": title[:400] if title else "",
+                "author": uploader if uploader else "unknown"
             }
             
-        except instaloader.exceptions.LoginRequiredException:
-            return {"success": False, "error": "🔒 Private post - cannot access"}
-        except instaloader.exceptions.ProfileNotExistsException:
-            return {"success": False, "error": "Profile not found or private"}
-        except instaloader.exceptions.QueryReturnedNotFoundException:
-            return {"success": False, "error": "Post not found (deleted)"}
-        except instaloader.exceptions.BadResponseException as e:
-            error_str = str(e)
-            if any(x in error_str.lower() for x in ['age', 'restricted', 'inappropriate', 'sensitive']):
-                return {
-                    "success": False,
-                    "error": "🔞 Age-Restricted Content\n\nThis post is flagged by Instagram and cannot be downloaded.\n\nReasons:\n• Age-restricted (18+)\n• Sensitive/inappropriate content\n• Community guidelines violation\n\nYou must view this directly in the Instagram app."
-                }
-            return {"success": False, "error": f"Instagram error: {error_str[:100]}"}
-        except instaloader.exceptions.ConnectionException as e:
-            if "429" in str(e):
-                return {"success": False, "error": "⛔ Rate limited. Wait 30-60 minutes."}
-            if "401" in str(e):
-                return {"success": False, "error": "❌ Session expired. Restart bot."}
-            return {"success": False, "error": f"Connection error: {e}"}
         except Exception as e:
             error_str = str(e)
-            if any(x in error_str.lower() for x in ['age', 'restricted', 'inappropriate']):
-                return {
-                    "success": False,
-                    "error": "🔞 Age-Restricted or Inappropriate Content\n\nThis post cannot be downloaded due to Instagram's content policies."
-                }
-            print(f"❌ Error: {e}")
-            return {"success": False, "error": f"Download failed: {error_str[:150]}"}
+            print(f"❌ yt-dlp failed: {e}")
+            
+            if any(x in error_str.lower() for x in ['inappropriate', 'age', 'restricted', 'login', 'private']):
+                return {"success": False, "error": "Content restricted or requires login"}
+            
+            return {"success": False, "error": f"yt-dlp error: {error_str[:100]}"}
 
 ig_downloader = InstagramDownloader()
 
@@ -260,12 +321,15 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 Hello {user.first_name}!
 
-📸 *Instagram* - Posts, Reels, Stories
+📸 *Instagram* - Posts, Reels
 🎬 *YouTube* - Videos
 
-⚠️ *Note:* Age-restricted Instagram content cannot be downloaded.
+⚠️ *Note:* 
+• Private posts cannot be downloaded
+• Deleted posts cannot be downloaded
+• Instagram may block downloads temporarily
 
-Send me a link to start!
+Send me a link!
 """, parse_mode=ParseMode.MARKDOWN)
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -291,6 +355,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         if not result.get("success"):
             await msg.edit_text(result.get("error", "Failed"), parse_mode=ParseMode.MARKDOWN)
+            # Cleanup on failure
+            temp_dir = result.get("temp_dir")
+            if temp_dir:
+                shutil.rmtree(temp_dir, ignore_errors=True)
             return
         
         await msg.edit_text("📤 Sending...")
@@ -299,9 +367,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             files = result.get("files", [])
             caption = html.escape(result.get('caption', '')[:400])
             author = html.escape(result.get('author', 'unknown'))
+            method = result.get('method', 'unknown')
             
             await update.message.reply_text(
-                f"📸 <b>Instagram Post</b>\n👤 @{author}\n\n{caption if caption else '<i>No caption</i>'}",
+                f"📸 <b>Instagram Post</b> ({method})\n👤 @{author}\n\n{caption if caption else '<i>No caption</i>'}",
                 parse_mode=ParseMode.HTML
             )
             
@@ -318,7 +387,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 except Exception as e:
                     print(f"Send error: {e}")
             
-            shutil.rmtree(result.get("temp_dir"), ignore_errors=True)
+            # Cleanup
+            temp_dir = result.get("temp_dir")
+            if temp_dir:
+                shutil.rmtree(temp_dir, ignore_errors=True)
+            
             await msg.edit_text(f"✅ {sent} files sent")
             
         else:  # YouTube
@@ -343,6 +416,7 @@ def main():
     print("="*60)
     print(f"📸 Instagram: {'✅' if IG_USERNAME else '⚠️ Anonymous'}")
     print(f"🎬 YouTube: {'✅' if yt_downloader.available else '❌'}")
+    print(f"🔧 Fallback: {'✅ yt-dlp' if ig_downloader.yt_dlp_available else '❌'}")
     print("="*60 + "\n")
     
     app = Application.builder().token(BOT_TOKEN).build()
