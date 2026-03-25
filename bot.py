@@ -106,30 +106,60 @@ class InstagramDownloader:
         if not shortcode:
             return {"success": False, "error": "Invalid Instagram URL"}
 
-        # Attempt Instaloader
-        try:
-            print(f"📥 Instaloader: {shortcode}")
-            post = instaloader.Post.from_shortcode(self.L.context, shortcode)
-            self.L.dirname_pattern = str(temp_dir)
-            self.L.download_post(post, target=shortcode)
-            
-            files = self._collect_files(temp_dir)
-            if files:
-                return {
-                    "success": True, "files": files, "method": "instaloader",
-                    "caption": post.caption[:400] if post.caption else "",
-                    "author": post.owner_username, "temp_dir": str(temp_dir)
-                }
-        except Exception as e:
-            print(f"⚠️ Instaloader failed: {e}. Trying yt-dlp...")
+        await asyncio.sleep(1)
 
-        # Fallback to yt-dlp
+        for attempt in range(2):
+            if attempt > 0:
+                wait_time = attempt * 2
+                print(f"⏳ Retry {attempt + 1} after {wait_time}s delay...")
+                await asyncio.sleep(wait_time)
+                try:
+                    print(f"🔄 Re-logging to refresh session...")
+                    self._login()
+                except Exception:
+                    pass
+                await asyncio.sleep(2)
+                shutil.rmtree(temp_dir, ignore_errors=True)
+                temp_dir.mkdir(exist_ok=True)
+
+            try:
+                print(f"📥 Instaloader attempt {attempt + 1}: {shortcode}")
+                post = instaloader.Post.from_shortcode(self.L.context, shortcode)
+                self.L.dirname_pattern = str(temp_dir)
+                self.L.download_post(post, target=shortcode)
+                
+                files = self._collect_files(temp_dir)
+                if files:
+                    return {
+                        "success": True, "files": files, "method": "instaloader",
+                        "caption": post.caption[:400] if post.caption else "",
+                        "author": post.owner_username, "temp_dir": str(temp_dir)
+                    }
+            except Exception as e:
+                error_str = str(e).lower()
+                print(f"⚠️ Instaloader attempt {attempt + 1} failed: {e}")
+                
+                if 'rate' in error_str or 'blocked' in error_str or 'login' in error_str:
+                    if attempt < 1:
+                        await asyncio.sleep(3)
+                        continue
+                
+                if self.yt_dlp_available:
+                    print(f"🔄 Falling back to yt-dlp...")
+                    yt_result = await self._download_with_ytdlp(url, temp_dir)
+                    if yt_result.get("success"):
+                        return yt_result
+                    elif attempt < 1:
+                        await asyncio.sleep(3)
+                        continue
+
         if self.yt_dlp_available:
             return await self._download_with_ytdlp(url, temp_dir)
         
-        return {"success": False, "error": "Both download methods failed."}
+        return {"success": False, "error": "Download failed after multiple attempts. Content may be private, restricted, or rate-limited."}
 
-    async def _download_with_ytdlp(self, url: str, temp_dir: Path) -> dict:
+    async def _download_with_ytdlp(self, url: str, temp_dir: Path, retry_count: int = 0) -> dict:
+        max_retries = 2
         try:
             from yt_dlp import YoutubeDL
             output_path = str(temp_dir / "inst_%(title)s.%(ext)s")
@@ -139,12 +169,29 @@ class InstagramDownloader:
                 'outtmpl': output_path,
                 'noplaylist': True,
                 'quiet': True,
+                'no_warnings': True,
+                'extractor_retries': 3,
+                'fragment_retries': 3,
+                'http_headers': {
+                    'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
+                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+                    'Accept-Language': 'en-US,en;q=0.9',
+                    'Accept-Encoding': 'gzip, deflate, br',
+                    'Connection': 'keep-alive',
+                    'Upgrade-Insecure-Requests': '1',
+                    'Sec-Fetch-Dest': 'document',
+                    'Sec-Fetch-Mode': 'navigate',
+                    'Sec-Fetch-Site': 'none',
+                    'Sec-Fetch-User': '?1',
+                },
             }
             
-            # Use cookies if available
+            if IG_USERNAME and IG_PASSWORD:
+                ydl_opts['username'] = IG_USERNAME
+                ydl_opts['password'] = IG_PASSWORD
+            
             if COOKIE_FILE.exists():
                 ydl_opts['cookiefile'] = str(COOKIE_FILE)
-                print("🍪 Using cookies.txt for yt-dlp")
 
             with YoutubeDL(ydl_opts) as ydl:
                 info = ydl.extract_info(url, download=True)
@@ -157,7 +204,15 @@ class InstagramDownloader:
                     "author": info.get('uploader', 'unknown'), "temp_dir": str(temp_dir)
                 }
         except Exception as e:
-            return {"success": False, "error": f"yt-dlp failed: {str(e)[:100]}"}
+            error_msg = str(e)
+            
+            if retry_count < max_retries and any(x in error_msg.lower() for x in ['rate-limit', 'rate limit', '429', 'too many requests']):
+                wait_time = (retry_count + 1) * 3
+                print(f"⚠️ Rate limited, waiting {wait_time}s before retry ({retry_count + 1}/{max_retries})...")
+                await asyncio.sleep(wait_time)
+                return await self._download_with_ytdlp(url, temp_dir, retry_count + 1)
+            
+            return {"success": False, "error": f"yt-dlp failed: {error_msg[:100]}"}
         return {"success": False, "error": "No files found."}
 
     def _collect_files(self, temp_dir: Path) -> list:
