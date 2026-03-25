@@ -99,6 +99,13 @@ class InstagramDownloader:
                 print("💡 Tip: Copy the session file from your Mac to this folder.")
 
     async def download(self, url: str, download_id: str) -> dict:
+        if self.is_story_url(url):
+            if self.yt_dlp_available:
+                temp_dir = TEMP_DIR / f"ig_{download_id}"
+                temp_dir.mkdir(exist_ok=True)
+                return await self._download_with_ytdlp(url, temp_dir)
+            return await self.download_story(url, download_id)
+        
         temp_dir = TEMP_DIR / f"ig_{download_id}"
         temp_dir.mkdir(exist_ok=True)
         shortcode = self.extract_shortcode(url)
@@ -221,6 +228,44 @@ class InstagramDownloader:
     def extract_shortcode(self, url: str) -> str:
         m = re.search(r'instagram\.com/(?:p|reel|reels|tv)/([A-Za-z0-9_-]+)', url)
         return m.group(1) if m else None
+
+    def is_story_url(self, url: str):
+        m = re.search(r'instagram\.com/stories/([^/]+)/(\d+)', url)
+        if m:
+            return (m.group(1), m.group(2))
+        return None
+
+    async def download_story(self, url: str, download_id: str) -> dict:
+        temp_dir = TEMP_DIR / f"ig_{download_id}"
+        temp_dir.mkdir(exist_ok=True)
+        
+        story_info = self.is_story_url(url)
+        if not story_info:
+            return {"success": False, "error": "Invalid story URL"}
+        
+        username, story_id = story_info
+        
+        try:
+            print(f"📥 Downloading story: {username} ({story_id})")
+            from instaloader import Profile
+            
+            profile = Profile.from_username(self.L.context, username)
+            
+            self.L.dirname_pattern = str(temp_dir)
+            self.L.download_stories(userids=[profile.userid], target=username)
+            
+            files = self._collect_files(temp_dir)
+            if files:
+                return {
+                    "success": True, "files": files, "method": "instaloader",
+                    "caption": "", "author": username, "temp_dir": str(temp_dir)
+                }
+        except Exception as e:
+            print(f"⚠️ Story download failed: {e}")
+            if self.yt_dlp_available:
+                return await self._download_with_ytdlp(url, temp_dir)
+        
+        return {"success": False, "error": "Failed to download story"}
 
 ig_downloader = InstagramDownloader()
 
