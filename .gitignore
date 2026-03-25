@@ -42,6 +42,9 @@ session-*
 downloads/*
 !downloads/.gitkeep
 
+# Temp downloads
+temp_downloads/
+
 # OS
 .DS_Store
 Thumbs.db

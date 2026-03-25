@@ -1,2 +1,352 @@
-nohup: ignoring input
-nohup: failed to run command './run_bot.sh': No such file or directory
+✅ Loaded .env file
+Loaded session from /home/trojon/telebot/session_halo_aju2.
+✅ Loaded Instagram session from file: session_halo_aju2
+📁 File server running on http://0.0.0.0:8080
+🚀 Bot Starting | Token: 8240799690...
+2026-03-25 15:13:37,253 - INFO - HTTP Request: POST https://api.telegram.org/bot8240799690:AAGpKNb8HSOFt5lhb3BvRJb59a95LKPV4Fs/getMe "HTTP/1.1 200 OK"
+2026-03-25 15:13:37,446 - INFO - HTTP Request: POST https://api.telegram.org/bot8240799690:AAGpKNb8HSOFt5lhb3BvRJb59a95LKPV4Fs/deleteWebhook "HTTP/1.1 200 OK"
+2026-03-25 15:13:37,447 - INFO - Application started
+2026-03-25 15:13:47,957 - INFO - HTTP Request: POST https://api.telegram.org/bot8240799690:AAGpKNb8HSOFt5lhb3BvRJb59a95LKPV4Fs/getUpdates "HTTP/1.1 200 OK"
+2026-03-25 15:13:58,130 - INFO - HTTP Request: POST https://api.telegram.org/bot8240799690:AAGpKNb8HSOFt5lhb3BvRJb59a95LKPV4Fs/getUpdates "HTTP/1.1 200 OK"
+100.115.90.45 - - [25/Mar/2026 15:14:00] code 404, message File not found
+100.115.90.45 - - [25/Mar/2026 15:14:00] "GET /favicon.ico HTTP/1.1" 404 -
+2026-03-25 15:14:06,883 - INFO - HTTP Request: POST https://api.telegram.org/bot8240799690:AAGpKNb8HSOFt5lhb3BvRJb59a95LKPV4Fs/getUpdates "HTTP/1.1 200 OK"
+2026-03-25 15:14:07,634 - INFO - HTTP Request: POST https://api.telegram.org/bot8240799690:AAGpKNb8HSOFt5lhb3BvRJb59a95LKPV4Fs/sendMessage "HTTP/1.1 200 OK"
+[youtube] Extracting URL: https://youtube.com/shorts/m4x48S3WYGE?si=0K3Tk3Gp_p20v1bQ
+[youtube] m4x48S3WYGE: Downloading webpage
+WARNING: [youtube] No supported JavaScript runtime could be found. Only deno is enabled by default; to use another runtime add  --js-runtimes RUNTIME[:PATH]  to your command/config. YouTube extraction without a JS runtime has been deprecated, and some formats may be missing. See  https://github.com/yt-dlp/yt-dlp/wiki/EJS  for details on installing one
+[youtube] m4x48S3WYGE: Downloading android vr player API JSON
+[info] m4x48S3WYGE: Downloading 1 format(s): 399+140
+[download] Destination: /home/trojon/telebot/temp_downloads/yt_678218111_1774431847/DUDY SAREE DANCE 😅 Family Eid Day #unboxingdude #minivlog #youtubeshorts #shortvideo #video #shorts.f399.mp4
+[download]   0.0% of   11.40MiB at  324.86KiB/s ETA 00:36[download]   0.0% of   11.40MiB at  878.51KiB/s ETA 00:13[download]   0.1% of   11.40MiB at    1.89MiB/s ETA 00:06[download]   0.1% of   11.40MiB at    3.84MiB/s ETA 00:02[download]   0.3% of   11.40MiB at    4.48MiB/s ETA 00:02[download]   0.5% of   11.40MiB at    7.57MiB/s ETA 00:01[download]   1.1% of   11.40MiB at   12.39MiB/s ETA 00:00[download]   2.2% of   11.40MiB at   20.55MiB/s ETA 00:00[download]   4.4% of   11.40MiB at   17.77MiB/s ETA 00:00[download]   8.8% of   11.40MiB at   16.19MiB/s ETA 00:00[download]  17.5% of   11.40MiB at   15.45MiB/s ETA 00:00[download]  35.1% of   11.40MiB at   23.99MiB/s ETA 00:00[download]  70.1% of   11.40MiB at   37.60MiB/s ETA 00:00[download]  87.2% of   11.40MiB at   26.77MiB/s ETA 00:00[download]  87.2% of   11.40MiB at  282.27KiB/s ETA 00:05[download]  87.2% of   11.40MiB at  791.68KiB/s ETA 00:01[download]  87.3% of   11.40MiB at    1.70MiB/s ETA 00:00[download]  87.3% of   11.40MiB at    3.48MiB/s ETA 00:00[download]  87.5% of   11.40MiB at    4.37MiB/s ETA 00:00[download]  87.7% of   11.40MiB at    7.76MiB/s ETA 00:00[download]  88.3% of   11.40MiB at   12.84MiB/s ETA 00:00[download]  89.4% of   11.40MiB at   21.06MiB/s ETA 00:00[download]  91.6% of   11.40MiB at   32.96MiB/s ETA 00:00[download]  96.0% of   11.40MiB at   46.49MiB/s ETA 00:00[download] 100.0% of   11.40MiB at   52.50MiB/s ETA 00:00[download] 100% of   11.40MiB in 00:00:00 at 19.40MiB/s  
+[download] Destination: /home/trojon/telebot/temp_downloads/yt_678218111_1774431847/DUDY SAREE DANCE 😅 Family Eid Day #unboxingdude #minivlog #youtubeshorts #shortvideo #video #shorts.f140.m4a
+[download]   0.1% of  773.98KiB at  270.72KiB/s ETA 00:02[download]   0.4% of  773.98KiB at  743.67KiB/s ETA 00:01[download]   0.9% of  773.98KiB at    1.62MiB/s ETA 00:00[download]   1.9% of  773.98KiB at    3.32MiB/s ETA 00:00[download]   4.0% of  773.98KiB at    4.46MiB/s ETA 00:00[download]   8.1% of  773.98KiB at    8.11MiB/s ETA 00:00[download]  16.4% of  773.98KiB at   13.21MiB/s ETA 00:00[download]  32.9% of  773.98KiB at   18.33MiB/s ETA 00:00[download]  66.0% of  773.98KiB at    9.83MiB/s ETA 00:00[download] 100.0% of  773.98KiB at    9.74MiB/s ETA 00:00[download] 100% of  773.98KiB in 00:00:00 at 4.36MiB/s   
+[Merger] Merging formats into "/home/trojon/telebot/temp_downloads/yt_678218111_1774431847/DUDY SAREE DANCE 😅 Family Eid Day #unboxingdude #minivlog #youtubeshorts #shortvideo #video #shorts.mkv"
+Deleting original file /home/trojon/telebot/temp_downloads/yt_678218111_1774431847/DUDY SAREE DANCE 😅 Family Eid Day #unboxingdude #minivlog #youtubeshorts #shortvideo #video #shorts.f140.m4a (pass -k to keep)
+Deleting original file /home/trojon/telebot/temp_downloads/yt_678218111_1774431847/DUDY SAREE DANCE 😅 Family Eid Day #unboxingdude #minivlog #youtubeshorts #shortvideo #video #shorts.f399.mp4 (pass -k to keep)
+2026-03-25 15:14:10,216 - INFO - HTTP Request: POST https://api.telegram.org/bot8240799690:AAGpKNb8HSOFt5lhb3BvRJb59a95LKPV4Fs/editMessageText "HTTP/1.1 200 OK"
+100.115.90.45 - - [25/Mar/2026 15:14:12] "GET /678218111_1774431847.mp4 HTTP/1.1" 200 -
+----------------------------------------
+Exception occurred during processing of request from ('100.115.90.45', 38562)
+Traceback (most recent call last):
+  File "/usr/lib/python3.12/socketserver.py", line 318, in _handle_request_noblock
+    self.process_request(request, client_address)
+  File "/usr/lib/python3.12/socketserver.py", line 349, in process_request
+    self.finish_request(request, client_address)
+  File "/usr/lib/python3.12/socketserver.py", line 362, in finish_request
+    self.RequestHandlerClass(request, client_address, self)
+  File "/home/trojon/telebot/bot.py", line 331, in __init__
+    super().__init__(*args, directory=str(download_dir), **kwargs)
+  File "/usr/lib/python3.12/http/server.py", line 672, in __init__
+    super().__init__(*args, **kwargs)
+  File "/usr/lib/python3.12/socketserver.py", line 761, in __init__
+    self.handle()
+  File "/usr/lib/python3.12/http/server.py", line 436, in handle
+    self.handle_one_request()
+  File "/usr/lib/python3.12/http/server.py", line 424, in handle_one_request
+    method()
+  File "/usr/lib/python3.12/http/server.py", line 679, in do_GET
+    self.copyfile(f, self.wfile)
+  File "/usr/lib/python3.12/http/server.py", line 878, in copyfile
+    shutil.copyfileobj(source, outputfile)
+  File "/usr/lib/python3.12/shutil.py", line 204, in copyfileobj
+    fdst_write(buf)
+  File "/usr/lib/python3.12/socketserver.py", line 840, in write
+    self._sock.sendall(b)
+ConnectionResetError: [Errno 104] Connection reset by peer
+----------------------------------------
+100.115.90.45 - - [25/Mar/2026 15:14:12] "GET /678218111_1774431847.mp4 HTTP/1.1" 200 -
+2026-03-25 15:14:17,053 - INFO - HTTP Request: POST https://api.telegram.org/bot8240799690:AAGpKNb8HSOFt5lhb3BvRJb59a95LKPV4Fs/getUpdates "HTTP/1.1 200 OK"
+2026-03-25 15:14:27,222 - INFO - HTTP Request: POST https://api.telegram.org/bot8240799690:AAGpKNb8HSOFt5lhb3BvRJb59a95LKPV4Fs/getUpdates "HTTP/1.1 200 OK"
+2026-03-25 15:14:37,389 - INFO - HTTP Request: POST https://api.telegram.org/bot8240799690:AAGpKNb8HSOFt5lhb3BvRJb59a95LKPV4Fs/getUpdates "HTTP/1.1 200 OK"
+2026-03-25 15:14:47,560 - INFO - HTTP Request: POST https://api.telegram.org/bot8240799690:AAGpKNb8HSOFt5lhb3BvRJb59a95LKPV4Fs/getUpdates "HTTP/1.1 200 OK"
+----------------------------------------
+Exception occurred during processing of request from ('100.115.90.45', 38564)
+Traceback (most recent call last):
+  File "/usr/lib/python3.12/socketserver.py", line 318, in _handle_request_noblock
+    self.process_request(request, client_address)
+  File "/usr/lib/python3.12/socketserver.py", line 349, in process_request
+    self.finish_request(request, client_address)
+  File "/usr/lib/python3.12/socketserver.py", line 362, in finish_request
+    self.RequestHandlerClass(request, client_address, self)
+  File "/home/trojon/telebot/bot.py", line 331, in __init__
+    super().__init__(*args, directory=str(download_dir), **kwargs)
+  File "/usr/lib/python3.12/http/server.py", line 672, in __init__
+    super().__init__(*args, **kwargs)
+  File "/usr/lib/python3.12/socketserver.py", line 761, in __init__
+    self.handle()
+  File "/usr/lib/python3.12/http/server.py", line 436, in handle
+    self.handle_one_request()
+  File "/usr/lib/python3.12/http/server.py", line 424, in handle_one_request
+    method()
+  File "/usr/lib/python3.12/http/server.py", line 679, in do_GET
+    self.copyfile(f, self.wfile)
+  File "/usr/lib/python3.12/http/server.py", line 878, in copyfile
+    shutil.copyfileobj(source, outputfile)
+  File "/usr/lib/python3.12/shutil.py", line 204, in copyfileobj
+    fdst_write(buf)
+  File "/usr/lib/python3.12/socketserver.py", line 840, in write
+    self._sock.sendall(b)
+ConnectionResetError: [Errno 104] Connection reset by peer
+----------------------------------------
+100.115.90.45 - - [25/Mar/2026 15:14:47] "GET /678218111_1774431847.mp4 HTTP/1.1" 200 -
+----------------------------------------
+Exception occurred during processing of request from ('100.115.90.45', 38572)
+Traceback (most recent call last):
+  File "/usr/lib/python3.12/socketserver.py", line 318, in _handle_request_noblock
+    self.process_request(request, client_address)
+  File "/usr/lib/python3.12/socketserver.py", line 349, in process_request
+    self.finish_request(request, client_address)
+  File "/usr/lib/python3.12/socketserver.py", line 362, in finish_request
+    self.RequestHandlerClass(request, client_address, self)
+  File "/home/trojon/telebot/bot.py", line 331, in __init__
+    super().__init__(*args, directory=str(download_dir), **kwargs)
+  File "/usr/lib/python3.12/http/server.py", line 672, in __init__
+    super().__init__(*args, **kwargs)
+  File "/usr/lib/python3.12/socketserver.py", line 761, in __init__
+    self.handle()
+  File "/usr/lib/python3.12/http/server.py", line 436, in handle
+    self.handle_one_request()
+  File "/usr/lib/python3.12/http/server.py", line 424, in handle_one_request
+    method()
+  File "/usr/lib/python3.12/http/server.py", line 679, in do_GET
+    self.copyfile(f, self.wfile)
+  File "/usr/lib/python3.12/http/server.py", line 878, in copyfile
+    shutil.copyfileobj(source, outputfile)
+  File "/usr/lib/python3.12/shutil.py", line 204, in copyfileobj
+    fdst_write(buf)
+  File "/usr/lib/python3.12/socketserver.py", line 840, in write
+    self._sock.sendall(b)
+ConnectionResetError: [Errno 104] Connection reset by peer
+----------------------------------------
+100.115.90.45 - - [25/Mar/2026 15:14:47] "GET /678218111_1774431847.mp4 HTTP/1.1" 200 -
+----------------------------------------
+Exception occurred during processing of request from ('100.115.90.45', 38576)
+Traceback (most recent call last):
+  File "/usr/lib/python3.12/socketserver.py", line 318, in _handle_request_noblock
+    self.process_request(request, client_address)
+  File "/usr/lib/python3.12/socketserver.py", line 349, in process_request
+    self.finish_request(request, client_address)
+  File "/usr/lib/python3.12/socketserver.py", line 362, in finish_request
+    self.RequestHandlerClass(request, client_address, self)
+  File "/home/trojon/telebot/bot.py", line 331, in __init__
+    super().__init__(*args, directory=str(download_dir), **kwargs)
+  File "/usr/lib/python3.12/http/server.py", line 672, in __init__
+    super().__init__(*args, **kwargs)
+  File "/usr/lib/python3.12/socketserver.py", line 761, in __init__
+    self.handle()
+  File "/usr/lib/python3.12/http/server.py", line 436, in handle
+    self.handle_one_request()
+  File "/usr/lib/python3.12/http/server.py", line 424, in handle_one_request
+    method()
+  File "/usr/lib/python3.12/http/server.py", line 679, in do_GET
+    self.copyfile(f, self.wfile)
+  File "/usr/lib/python3.12/http/server.py", line 878, in copyfile
+    shutil.copyfileobj(source, outputfile)
+  File "/usr/lib/python3.12/shutil.py", line 204, in copyfileobj
+    fdst_write(buf)
+  File "/usr/lib/python3.12/socketserver.py", line 840, in write
+    self._sock.sendall(b)
+BrokenPipeError: [Errno 32] Broken pipe
+----------------------------------------
+100.115.90.45 - - [25/Mar/2026 15:14:47] "GET /678218111_1774431847.mp4 HTTP/1.1" 200 -
+----------------------------------------
+Exception occurred during processing of request from ('100.115.90.45', 41656)
+Traceback (most recent call last):
+  File "/usr/lib/python3.12/socketserver.py", line 318, in _handle_request_noblock
+    self.process_request(request, client_address)
+  File "/usr/lib/python3.12/socketserver.py", line 349, in process_request
+    self.finish_request(request, client_address)
+  File "/usr/lib/python3.12/socketserver.py", line 362, in finish_request
+    self.RequestHandlerClass(request, client_address, self)
+  File "/home/trojon/telebot/bot.py", line 331, in __init__
+    super().__init__(*args, directory=str(download_dir), **kwargs)
+  File "/usr/lib/python3.12/http/server.py", line 672, in __init__
+    super().__init__(*args, **kwargs)
+  File "/usr/lib/python3.12/socketserver.py", line 761, in __init__
+    self.handle()
+  File "/usr/lib/python3.12/http/server.py", line 436, in handle
+    self.handle_one_request()
+  File "/usr/lib/python3.12/http/server.py", line 424, in handle_one_request
+    method()
+  File "/usr/lib/python3.12/http/server.py", line 679, in do_GET
+    self.copyfile(f, self.wfile)
+  File "/usr/lib/python3.12/http/server.py", line 878, in copyfile
+    shutil.copyfileobj(source, outputfile)
+  File "/usr/lib/python3.12/shutil.py", line 204, in copyfileobj
+    fdst_write(buf)
+  File "/usr/lib/python3.12/socketserver.py", line 840, in write
+    self._sock.sendall(b)
+BrokenPipeError: [Errno 32] Broken pipe
+----------------------------------------
+100.115.90.45 - - [25/Mar/2026 15:14:47] "GET /678218111_1774431847.mp4 HTTP/1.1" 200 -
+----------------------------------------
+Exception occurred during processing of request from ('100.115.90.45', 39278)
+Traceback (most recent call last):
+  File "/usr/lib/python3.12/socketserver.py", line 318, in _handle_request_noblock
+    self.process_request(request, client_address)
+  File "/usr/lib/python3.12/socketserver.py", line 349, in process_request
+    self.finish_request(request, client_address)
+  File "/usr/lib/python3.12/socketserver.py", line 362, in finish_request
+    self.RequestHandlerClass(request, client_address, self)
+  File "/home/trojon/telebot/bot.py", line 331, in __init__
+    super().__init__(*args, directory=str(download_dir), **kwargs)
+  File "/usr/lib/python3.12/http/server.py", line 672, in __init__
+    super().__init__(*args, **kwargs)
+  File "/usr/lib/python3.12/socketserver.py", line 761, in __init__
+    self.handle()
+  File "/usr/lib/python3.12/http/server.py", line 436, in handle
+    self.handle_one_request()
+  File "/usr/lib/python3.12/http/server.py", line 424, in handle_one_request
+    method()
+  File "/usr/lib/python3.12/http/server.py", line 679, in do_GET
+    self.copyfile(f, self.wfile)
+  File "/usr/lib/python3.12/http/server.py", line 878, in copyfile
+    shutil.copyfileobj(source, outputfile)
+  File "/usr/lib/python3.12/shutil.py", line 204, in copyfileobj
+    fdst_write(buf)
+  File "/usr/lib/python3.12/socketserver.py", line 840, in write
+    self._sock.sendall(b)
+BrokenPipeError: [Errno 32] Broken pipe
+----------------------------------------
+100.115.90.45 - - [25/Mar/2026 15:14:56] "GET /678218111_1774431847.mp4 HTTP/1.1" 200 -
+----------------------------------------
+Exception occurred during processing of request from ('100.115.90.45', 48978)
+Traceback (most recent call last):
+  File "/usr/lib/python3.12/socketserver.py", line 318, in _handle_request_noblock
+    self.process_request(request, client_address)
+  File "/usr/lib/python3.12/socketserver.py", line 349, in process_request
+    self.finish_request(request, client_address)
+  File "/usr/lib/python3.12/socketserver.py", line 362, in finish_request
+    self.RequestHandlerClass(request, client_address, self)
+  File "/home/trojon/telebot/bot.py", line 331, in __init__
+    super().__init__(*args, directory=str(download_dir), **kwargs)
+  File "/usr/lib/python3.12/http/server.py", line 672, in __init__
+    super().__init__(*args, **kwargs)
+  File "/usr/lib/python3.12/socketserver.py", line 761, in __init__
+    self.handle()
+  File "/usr/lib/python3.12/http/server.py", line 436, in handle
+    self.handle_one_request()
+  File "/usr/lib/python3.12/http/server.py", line 424, in handle_one_request
+    method()
+  File "/usr/lib/python3.12/http/server.py", line 679, in do_GET
+    self.copyfile(f, self.wfile)
+  File "/usr/lib/python3.12/http/server.py", line 878, in copyfile
+    shutil.copyfileobj(source, outputfile)
+  File "/usr/lib/python3.12/shutil.py", line 204, in copyfileobj
+    fdst_write(buf)
+  File "/usr/lib/python3.12/socketserver.py", line 840, in write
+    self._sock.sendall(b)
+ConnectionResetError: [Errno 104] Connection reset by peer
+----------------------------------------
+2026-03-25 15:14:57,730 - INFO - HTTP Request: POST https://api.telegram.org/bot8240799690:AAGpKNb8HSOFt5lhb3BvRJb59a95LKPV4Fs/getUpdates "HTTP/1.1 200 OK"
+100.115.90.45 - - [25/Mar/2026 15:14:57] "GET /678218111_1774431847.mp4 HTTP/1.1" 200 -
+2026-03-25 15:15:07,900 - INFO - HTTP Request: POST https://api.telegram.org/bot8240799690:AAGpKNb8HSOFt5lhb3BvRJb59a95LKPV4Fs/getUpdates "HTTP/1.1 200 OK"
+----------------------------------------
+Exception occurred during processing of request from ('100.115.90.45', 48982)
+Traceback (most recent call last):
+  File "/usr/lib/python3.12/socketserver.py", line 318, in _handle_request_noblock
+    self.process_request(request, client_address)
+  File "/usr/lib/python3.12/socketserver.py", line 349, in process_request
+    self.finish_request(request, client_address)
+  File "/usr/lib/python3.12/socketserver.py", line 362, in finish_request
+    self.RequestHandlerClass(request, client_address, self)
+  File "/home/trojon/telebot/bot.py", line 331, in __init__
+    super().__init__(*args, directory=str(download_dir), **kwargs)
+  File "/usr/lib/python3.12/http/server.py", line 672, in __init__
+    super().__init__(*args, **kwargs)
+  File "/usr/lib/python3.12/socketserver.py", line 761, in __init__
+    self.handle()
+  File "/usr/lib/python3.12/http/server.py", line 436, in handle
+    self.handle_one_request()
+  File "/usr/lib/python3.12/http/server.py", line 424, in handle_one_request
+    method()
+  File "/usr/lib/python3.12/http/server.py", line 679, in do_GET
+    self.copyfile(f, self.wfile)
+  File "/usr/lib/python3.12/http/server.py", line 878, in copyfile
+    shutil.copyfileobj(source, outputfile)
+  File "/usr/lib/python3.12/shutil.py", line 204, in copyfileobj
+    fdst_write(buf)
+  File "/usr/lib/python3.12/socketserver.py", line 840, in write
+    self._sock.sendall(b)
+ConnectionResetError: [Errno 104] Connection reset by peer
+----------------------------------------
+100.115.90.45 - - [25/Mar/2026 15:15:13] "GET /678218111_1774431847.mp4 HTTP/1.1" 304 -
+100.115.90.45 - - [25/Mar/2026 15:15:13] "GET /678218111_1774431847.mp4 HTTP/1.1" 200 -
+100.115.90.45 - - [25/Mar/2026 15:15:14] "GET /678218111_1774431847.mp4 HTTP/1.1" 200 -
+----------------------------------------
+Exception occurred during processing of request from ('100.115.90.45', 42938)
+Traceback (most recent call last):
+  File "/usr/lib/python3.12/socketserver.py", line 318, in _handle_request_noblock
+    self.process_request(request, client_address)
+  File "/usr/lib/python3.12/socketserver.py", line 349, in process_request
+    self.finish_request(request, client_address)
+  File "/usr/lib/python3.12/socketserver.py", line 362, in finish_request
+    self.RequestHandlerClass(request, client_address, self)
+  File "/home/trojon/telebot/bot.py", line 331, in __init__
+    super().__init__(*args, directory=str(download_dir), **kwargs)
+  File "/usr/lib/python3.12/http/server.py", line 672, in __init__
+    super().__init__(*args, **kwargs)
+  File "/usr/lib/python3.12/socketserver.py", line 761, in __init__
+    self.handle()
+  File "/usr/lib/python3.12/http/server.py", line 436, in handle
+    self.handle_one_request()
+  File "/usr/lib/python3.12/http/server.py", line 424, in handle_one_request
+    method()
+  File "/usr/lib/python3.12/http/server.py", line 679, in do_GET
+    self.copyfile(f, self.wfile)
+  File "/usr/lib/python3.12/http/server.py", line 878, in copyfile
+    shutil.copyfileobj(source, outputfile)
+  File "/usr/lib/python3.12/shutil.py", line 204, in copyfileobj
+    fdst_write(buf)
+  File "/usr/lib/python3.12/socketserver.py", line 840, in write
+    self._sock.sendall(b)
+ConnectionResetError: [Errno 104] Connection reset by peer
+----------------------------------------
+100.115.90.45 - - [25/Mar/2026 15:15:17] "GET /678218111_1774431847.mp4 HTTP/1.1" 200 -
+2026-03-25 15:15:18,072 - INFO - HTTP Request: POST https://api.telegram.org/bot8240799690:AAGpKNb8HSOFt5lhb3BvRJb59a95LKPV4Fs/getUpdates "HTTP/1.1 200 OK"
+2026-03-25 15:15:28,247 - INFO - HTTP Request: POST https://api.telegram.org/bot8240799690:AAGpKNb8HSOFt5lhb3BvRJb59a95LKPV4Fs/getUpdates "HTTP/1.1 200 OK"
+----------------------------------------
+Exception occurred during processing of request from ('100.115.90.45', 42940)
+Traceback (most recent call last):
+  File "/usr/lib/python3.12/socketserver.py", line 318, in _handle_request_noblock
+    self.process_request(request, client_address)
+  File "/usr/lib/python3.12/socketserver.py", line 349, in process_request
+    self.finish_request(request, client_address)
+  File "/usr/lib/python3.12/socketserver.py", line 362, in finish_request
+    self.RequestHandlerClass(request, client_address, self)
+  File "/home/trojon/telebot/bot.py", line 331, in __init__
+    super().__init__(*args, directory=str(download_dir), **kwargs)
+  File "/usr/lib/python3.12/http/server.py", line 672, in __init__
+    super().__init__(*args, **kwargs)
+  File "/usr/lib/python3.12/socketserver.py", line 761, in __init__
+    self.handle()
+  File "/usr/lib/python3.12/http/server.py", line 436, in handle
+    self.handle_one_request()
+  File "/usr/lib/python3.12/http/server.py", line 424, in handle_one_request
+    method()
+  File "/usr/lib/python3.12/http/server.py", line 679, in do_GET
+    self.copyfile(f, self.wfile)
+  File "/usr/lib/python3.12/http/server.py", line 878, in copyfile
+    shutil.copyfileobj(source, outputfile)
+  File "/usr/lib/python3.12/shutil.py", line 204, in copyfileobj
+    fdst_write(buf)
+  File "/usr/lib/python3.12/socketserver.py", line 840, in write
+    self._sock.sendall(b)
+ConnectionResetError: [Errno 104] Connection reset by peer
+----------------------------------------
+2026-03-25 15:15:38,449 - INFO - HTTP Request: POST https://api.telegram.org/bot8240799690:AAGpKNb8HSOFt5lhb3BvRJb59a95LKPV4Fs/getUpdates "HTTP/1.1 200 OK"
+2026-03-25 15:15:48,619 - INFO - HTTP Request: POST https://api.telegram.org/bot8240799690:AAGpKNb8HSOFt5lhb3BvRJb59a95LKPV4Fs/getUpdates "HTTP/1.1 200 OK"
+2026-03-25 15:15:58,789 - INFO - HTTP Request: POST https://api.telegram.org/bot8240799690:AAGpKNb8HSOFt5lhb3BvRJb59a95LKPV4Fs/getUpdates "HTTP/1.1 200 OK"
+2026-03-25 15:16:08,959 - INFO - HTTP Request: POST https://api.telegram.org/bot8240799690:AAGpKNb8HSOFt5lhb3BvRJb59a95LKPV4Fs/getUpdates "HTTP/1.1 200 OK"
+2026-03-25 15:16:19,132 - INFO - HTTP Request: POST https://api.telegram.org/bot8240799690:AAGpKNb8HSOFt5lhb3BvRJb59a95LKPV4Fs/getUpdates "HTTP/1.1 200 OK"
+2026-03-25 15:16:29,302 - INFO - HTTP Request: POST https://api.telegram.org/bot8240799690:AAGpKNb8HSOFt5lhb3BvRJb59a95LKPV4Fs/getUpdates "HTTP/1.1 200 OK"
+2026-03-25 15:16:39,491 - INFO - HTTP Request: POST https://api.telegram.org/bot8240799690:AAGpKNb8HSOFt5lhb3BvRJb59a95LKPV4Fs/getUpdates "HTTP/1.1 200 OK"
+2026-03-25 15:16:49,659 - INFO - HTTP Request: POST https://api.telegram.org/bot8240799690:AAGpKNb8HSOFt5lhb3BvRJb59a95LKPV4Fs/getUpdates "HTTP/1.1 200 OK"
+2026-03-25 15:16:59,829 - INFO - HTTP Request: POST https://api.telegram.org/bot8240799690:AAGpKNb8HSOFt5lhb3BvRJb59a95LKPV4Fs/getUpdates "HTTP/1.1 200 OK"
+2026-03-25 15:17:10,002 - INFO - HTTP Request: POST https://api.telegram.org/bot8240799690:AAGpKNb8HSOFt5lhb3BvRJb59a95LKPV4Fs/getUpdates "HTTP/1.1 200 OK"
+2026-03-25 15:17:20,181 - INFO - HTTP Request: POST https://api.telegram.org/bot8240799690:AAGpKNb8HSOFt5lhb3BvRJb59a95LKPV4Fs/getUpdates "HTTP/1.1 200 OK"
+2026-03-25 15:17:30,349 - INFO - HTTP Request: POST https://api.telegram.org/bot8240799690:AAGpKNb8HSOFt5lhb3BvRJb59a95LKPV4Fs/getUpdates "HTTP/1.1 200 OK"
+2026-03-25 15:17:40,516 - INFO - HTTP Request: POST https://api.telegram.org/bot8240799690:AAGpKNb8HSOFt5lhb3BvRJb59a95LKPV4Fs/getUpdates "HTTP/1.1 200 OK"
+2026-03-25 15:17:50,683 - INFO - HTTP Request: POST https://api.telegram.org/bot8240799690:AAGpKNb8HSOFt5lhb3BvRJb59a95LKPV4Fs/getUpdates "HTTP/1.1 200 OK"
+2026-03-25 15:18:00,852 - INFO - HTTP Request: POST https://api.telegram.org/bot8240799690:AAGpKNb8HSOFt5lhb3BvRJb59a95LKPV4Fs/getUpdates "HTTP/1.1 200 OK"

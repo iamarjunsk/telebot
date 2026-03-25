@@ -12,6 +12,7 @@ import logging
 import shutil
 import html
 from pathlib import Path
+from datetime import datetime
 
 try:
     from dotenv import load_dotenv
@@ -274,14 +275,19 @@ ig_downloader = InstagramDownloader()
 # ============================================================================
 
 class YouTubeDownloader:
+    def __init__(self):
+        self.server_ip = "100.97.53.84"
+        self.server_port = 8080
+    
     async def download(self, url: str, download_id: str) -> dict:
         temp_dir = TEMP_DIR / f"yt_{download_id}"
         temp_dir.mkdir(exist_ok=True)
         try:
             from yt_dlp import YoutubeDL
             ydl_opts = {
-                'format': 'best[filesize<50M]/bestvideo[filesize<50M]+bestaudio/best',
+                'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best[ext=mp4]/best',
                 'outtmpl': str(temp_dir / "%(title)s.%(ext)s"),
+                'prefer_free_formats': True,
             }
             with YoutubeDL(ydl_opts) as ydl:
                 info = ydl.extract_info(url, download=True)
@@ -289,12 +295,79 @@ class YouTubeDownloader:
             files = list(temp_dir.iterdir())
             if files:
                 video_file = max(files, key=lambda x: x.stat().st_size)
-                return {"success": True, "file": str(video_file), "title": info.get('title'), "temp_dir": str(temp_dir)}
+                safe_name = f"{download_id}.mp4"
+                dest_file = TEMP_DIR / safe_name
+                shutil.move(str(video_file), str(dest_file))
+                shutil.rmtree(temp_dir, ignore_errors=True)
+                download_url = f"http://{self.server_ip}:{self.server_port}/{safe_name}"
+                return {
+                    "success": True, 
+                    "file": str(dest_file), 
+                    "title": info.get('title'), 
+                    "temp_dir": str(TEMP_DIR),
+                    "download_url": download_url,
+                    "filename": safe_name
+                }
         except Exception as e:
             return {"success": False, "error": str(e)}
         return {"success": False, "error": "Download failed"}
 
 yt_downloader = YouTubeDownloader()
+
+# ============================================================================
+# FILE SERVER
+# ============================================================================
+
+class FileServer:
+    def __init__(self, download_dir, ip="0.0.0.0", port=8080):
+        from http.server import HTTPServer, SimpleHTTPRequestHandler
+        
+        self.download_dir = download_dir
+        self.ip = ip
+        self.port = port
+        
+        class Handler(SimpleHTTPRequestHandler):
+            def __init__(self, *args, **kwargs):
+                super().__init__(*args, directory=str(download_dir), **kwargs)
+        
+        self.handler = Handler
+        
+    def start(self):
+        import threading
+        from http.server import HTTPServer
+        
+        server = HTTPServer((self.ip, self.port), self.handler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        print(f"📁 File server running on http://{self.ip}:{self.port}")
+
+def daily_cleanup():
+    import threading
+    import time
+    
+    def cleanup_loop():
+        while True:
+            now = datetime.now()
+            target = now.replace(hour=23, minute=59, second=0, microsecond=0)
+            if now > target:
+                target = target.replace(day=target.day + 1)
+            wait_seconds = (target - now).total_seconds()
+            time.sleep(wait_seconds)
+            
+            for item in TEMP_DIR.iterdir():
+                try:
+                    if item.is_file():
+                        item.unlink()
+                    elif item.is_dir():
+                        shutil.rmtree(item)
+                except Exception as e:
+                    print(f"⚠️ Cleanup error: {e}")
+            print("🧹 Daily cleanup completed")
+    
+    thread = threading.Thread(target=cleanup_loop, daemon=True)
+    thread.start()
+
+file_server = FileServer(TEMP_DIR)
 
 # ============================================================================
 # BOT HANDLERS
@@ -329,15 +402,15 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             res = await yt_downloader.download(url, download_id)
             if res["success"]:
-                with open(res["file"], 'rb') as f:
-                    await update.message.reply_video(video=f, caption=res['title'])
-                shutil.rmtree(res["temp_dir"], ignore_errors=True)
-                await msg.delete()
+                await msg.edit_text(f"✅ Downloaded: {res['title']}\n\n📥 Download: {res['download_url']}")
     except Exception as e:
         await msg.edit_text(f"❌ Error: {e}")
 
 def main():
+    file_server.start()
+    daily_cleanup()
     print(f"🚀 Bot Starting | Token: {BOT_TOKEN[:10]}...")
+    
     app = Application.builder().token(BOT_TOKEN).build()
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     app.run_polling(drop_pending_updates=True)
