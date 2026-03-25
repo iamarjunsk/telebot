@@ -1,0 +1,12 @@
+2026-03-25 16:10:56,943 - INFO - HTTP Request: POST https://api.telegram.org/bot8240799690:AAGpKNb8HSOFt5lhb3BvRJb59a95LKPV4Fs/getMe "HTTP/1.1 200 OK"
+2026-03-25 16:10:57,110 - INFO - HTTP Request: POST https://api.telegram.org/bot8240799690:AAGpKNb8HSOFt5lhb3BvRJb59a95LKPV4Fs/deleteWebhook "HTTP/1.1 200 OK"
+2026-03-25 16:10:57,111 - INFO - Application started
+2026-03-25 16:11:07,629 - INFO - HTTP Request: POST https://api.telegram.org/bot8240799690:AAGpKNb8HSOFt5lhb3BvRJb59a95LKPV4Fs/getUpdates "HTTP/1.1 200 OK"
+2026-03-25 16:11:17,804 - INFO - HTTP Request: POST https://api.telegram.org/bot8240799690:AAGpKNb8HSOFt5lhb3BvRJb59a95LKPV4Fs/getUpdates "HTTP/1.1 200 OK"
+2026-03-25 16:11:24,744 - INFO - HTTP Request: POST https://api.telegram.org/bot8240799690:AAGpKNb8HSOFt5lhb3BvRJb59a95LKPV4Fs/getUpdates "HTTP/1.1 200 OK"
+2026-03-25 16:11:24,745 - INFO - Application is stopping. This might take a moment.
+2026-03-25 16:11:24,745 - INFO - Application.stop() complete
+✅ Loaded .env file
+✅ Loaded Instagram session from cookies.txt
+📁 File server running on http://0.0.0.0:8080
+🚀 Bot Starting | Token: 8240799690...

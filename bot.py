@@ -12,7 +12,6 @@ import logging
 import shutil
 import html
 from pathlib import Path
-from datetime import datetime
 
 try:
     from dotenv import load_dotenv
@@ -34,6 +33,9 @@ from telegram.constants import ParseMode
 
 # Configuration
 BOT_TOKEN = os.getenv("BOT_TOKEN", "")
+SERVER_IP = os.getenv("SERVER_IP", "100.97.53.84")
+SERVER_PORT = int(os.getenv("SERVER_PORT", "8080"))
+MAX_UPLOAD_SIZE = 50 * 1024 * 1024  # 50MB
 IG_USERNAME = os.getenv("IG_USERNAME", "")
 IG_PASSWORD = os.getenv("IG_PASSWORD", "")
 
@@ -46,6 +48,24 @@ BASE_DIR = Path(__file__).parent
 TEMP_DIR = BASE_DIR / "temp_downloads"
 TEMP_DIR.mkdir(exist_ok=True)
 COOKIE_FILE = BASE_DIR / "cookies.txt"
+SERVER_IP = os.getenv("SERVER_IP", "100.97.53.84")
+SERVER_PORT = int(os.getenv("SERVER_PORT", "8080"))
+MAX_UPLOAD_SIZE = 50 * 1024 * 1024  # 50MB
+
+def start_file_server():
+    import threading
+    from http.server import HTTPServer, SimpleHTTPRequestHandler
+    import os
+    os.chdir(TEMP_DIR)
+    class Handler(SimpleHTTPRequestHandler):
+        def log_message(self, format, *args):
+            pass
+    def run():
+        HTTPServer(('', SERVER_PORT), Handler).serve_forever()
+    threading.Thread(target=run, daemon=True).start()
+    print(f"📁 File server running on http://{SERVER_IP}:{SERVER_PORT}")
+
+start_file_server()
 
 logging.basicConfig(
     level=logging.INFO,
@@ -170,7 +190,7 @@ class InstagramDownloader:
         max_retries = 2
         try:
             from yt_dlp import YoutubeDL
-            output_path = str(temp_dir / "yt_%(id)s.%(ext)s")
+            output_path = str(temp_dir / "inst_%(title)s.%(ext)s")
             
             ydl_opts = {
                 'format': 'best[filesize<50M]/best',
@@ -178,8 +198,10 @@ class InstagramDownloader:
                 'noplaylist': True,
                 'quiet': True,
                 'no_warnings': True,
-                'extractor_retries': 3,
-                'fragment_retries': 3,
+                'extractor_retries': 5,
+                'fragment_retries': 5,
+                'retries': 5,
+                'socket_timeout': 30,
                 'http_headers': {
                     'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
                     'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
@@ -275,120 +297,31 @@ ig_downloader = InstagramDownloader()
 # ============================================================================
 
 class YouTubeDownloader:
-    def __init__(self):
-        self.server_ip = "100.97.53.84"
-        self.server_port = 8080
-    
-    async def download(self, url: str, download_id: str, progress_msg=None) -> dict:
-        import asyncio
-        import concurrent.futures
-        
+    async def download(self, url: str, download_id: str) -> dict:
         temp_dir = TEMP_DIR / f"yt_{download_id}"
         temp_dir.mkdir(exist_ok=True)
-        
-        async def update_progress(text):
-            if progress_msg:
-                try:
-                    await progress_msg.edit_text(text)
-                except:
-                    pass
-        
-        def download_sync():
+        try:
             from yt_dlp import YoutubeDL
             ydl_opts = {
                 'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best[ext=mp4]/best',
                 'outtmpl': str(temp_dir / "yt_%(id)s.%(ext)s"),
                 'prefer_free_formats': True,
+                'retries': 5,
+                'socket_timeout': 30,
+                'fragment_retries': 5,
             }
             with YoutubeDL(ydl_opts) as ydl:
-                ydl.download([url])
-        
-        try:
-            loop = asyncio.get_event_loop()
-            with concurrent.futures.ThreadPoolExecutor() as executor:
-                await loop.run_in_executor(executor, download_sync)
+                info = ydl.extract_info(url, download=True)
             
             files = list(temp_dir.iterdir())
             if files:
                 video_file = max(files, key=lambda x: x.stat().st_size)
-                safe_name = f"{download_id}.mp4"
-                dest_file = TEMP_DIR / safe_name
-                shutil.move(str(video_file), str(dest_file))
-                shutil.rmtree(temp_dir, ignore_errors=True)
-                download_url = f"http://{self.server_ip}:{self.server_port}/{safe_name}"
-                
-                from yt_dlp import YoutubeDL
-                ydl = YoutubeDL({'quiet': True})
-                info = ydl.extract_info(url, download=False)
-                
-                return {
-                    "success": True, 
-                    "file": str(dest_file), 
-                    "title": info.get('title'), 
-                    "temp_dir": str(TEMP_DIR),
-                    "download_url": download_url,
-                    "filename": safe_name
-                }
+                return {"success": True, "file": str(video_file), "title": info.get('title'), "temp_dir": str(temp_dir)}
         except Exception as e:
             return {"success": False, "error": str(e)}
         return {"success": False, "error": "Download failed"}
 
 yt_downloader = YouTubeDownloader()
-
-# ============================================================================
-# FILE SERVER
-# ============================================================================
-
-class FileServer:
-    def __init__(self, download_dir, ip="0.0.0.0", port=8080):
-        from http.server import HTTPServer, SimpleHTTPRequestHandler
-        
-        self.download_dir = download_dir
-        self.ip = ip
-        self.port = port
-        
-        class Handler(SimpleHTTPRequestHandler):
-            def __init__(self, *args, **kwargs):
-                super().__init__(*args, directory=str(download_dir), **kwargs)
-        
-        self.handler = Handler
-        
-    def start(self):
-        import threading
-        from http.server import HTTPServer
-        
-        server = HTTPServer((self.ip, self.port), self.handler)
-        thread = threading.Thread(target=server.serve_forever, daemon=True)
-        thread.start()
-        print(f"📁 File server running on http://{self.ip}:{self.port}")
-
-def daily_cleanup():
-    import threading
-    import time
-    
-    def cleanup_loop():
-        while True:
-            now = datetime.now()
-            target = now.replace(hour=23, minute=59, second=0, microsecond=0)
-            if now > target:
-                target = target.replace(day=target.day + 1)
-            wait_seconds = (target - now).total_seconds()
-            time.sleep(wait_seconds)
-            
-            for item in TEMP_DIR.iterdir():
-                try:
-                    if item.is_file():
-                        item.unlink()
-                    elif item.is_dir():
-                        shutil.rmtree(item)
-                except Exception as e:
-                    print(f"⚠️ Cleanup error: {e}")
-            print("🧹 Daily cleanup completed")
-    
-    thread = threading.Thread(target=cleanup_loop, daemon=True)
-    thread.start()
-
-file_server = FileServer(TEMP_DIR)
 
 # ============================================================================
 # BOT HANDLERS
@@ -409,44 +342,47 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if platform == "instagram":
             res = await ig_downloader.download(url, download_id)
             if res["success"]:
-                await msg.edit_text("📤 Sending...")
                 for f in res["files"]:
-                    with open(f, 'rb') as file:
-                        if f.lower().endswith(('.mp4', '.mov')):
-                            await update.message.reply_video(video=file, caption=f"👤 @{res['author']}")
-                        else:
-                            await update.message.reply_photo(photo=file)
-                shutil.rmtree(res["temp_dir"], ignore_errors=True)
-                await msg.delete()
+                    file_size = Path(f).stat().st_size
+                    if file_size > MAX_UPLOAD_SIZE:
+                        filename = f"{download_id}_{Path(f).name}"
+                        dest = TEMP_DIR / filename
+                        shutil.move(f, dest)
+                        link = f"http://{SERVER_IP}:{SERVER_PORT}/{filename}"
+                        await msg.edit_text(f"📎 File too large for Telegram: {Path(f).name}\n\n🔗 Download: {link}\n\n⏰ Link expires in 1 hour")
+                    else:
+                        await msg.edit_text("📤 Sending...")
+                        with open(f, 'rb') as file:
+                            if f.lower().endswith(('.mp4', '.mov')):
+                                await update.message.reply_video(video=file, caption=f"👤 @{res['author']}", read_timeout=300, write_timeout=300)
+                            else:
+                                await update.message.reply_photo(photo=file, read_timeout=300, write_timeout=300)
+                        shutil.rmtree(res["temp_dir"], ignore_errors=True)
+                        await msg.delete()
             else:
                 await msg.edit_text(f"❌ {res['error']}")
         else:
-            await msg.edit_text("⏳ Downloading YouTube video...")
             res = await yt_downloader.download(url, download_id)
             if res["success"]:
-                await msg.edit_text(f"✅ Downloaded: {res['title']}\n\n📥 Download: {res['download_url']}")
+                file_size = Path(res["file"]).stat().st_size
+                if file_size > MAX_UPLOAD_SIZE:
+                    filename = f"{download_id}_{Path(res['file']).name}"
+                    dest = TEMP_DIR / filename
+                    shutil.move(res["file"], dest)
+                    link = f"http://{SERVER_IP}:{SERVER_PORT}/{filename}"
+                    await msg.edit_text(f"📎 File too large for Telegram: {res['title']}\n\n🔗 Download: {link}\n\n⏰ Link expires in 1 hour")
+                else:
+                    with open(res["file"], 'rb') as f:
+                        await update.message.reply_video(video=f, caption=res['title'], read_timeout=300, write_timeout=300)
+                    shutil.rmtree(res["temp_dir"], ignore_errors=True)
+                    await msg.delete()
     except Exception as e:
         await msg.edit_text(f"❌ Error: {e}")
 
-async def error_handler(update, context):
-    error_msg = str(context.error)
-    print(f"❌ Error: {error_msg}")
-    logger.error(f"Error: {error_msg}")
-    
-    if update and update.message:
-        try:
-            await update.message.reply_text(f"❌ Error: {error_msg[:500]}")
-        except:
-            pass
-
 def main():
-    file_server.start()
-    daily_cleanup()
     print(f"🚀 Bot Starting | Token: {BOT_TOKEN[:10]}...")
-    
     app = Application.builder().token(BOT_TOKEN).build()
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-    app.add_error_handler(error_handler)
     app.run_polling(drop_pending_updates=True)
 
 if __name__ == "__main__":
