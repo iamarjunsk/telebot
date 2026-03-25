@@ -170,7 +170,7 @@ class InstagramDownloader:
         max_retries = 2
         try:
             from yt_dlp import YoutubeDL
-            output_path = str(temp_dir / "inst_%(title)s.%(ext)s")
+            output_path = str(temp_dir / "yt_%(id)s.%(ext)s")
             
             ydl_opts = {
                 'format': 'best[filesize<50M]/best',
@@ -279,18 +279,34 @@ class YouTubeDownloader:
         self.server_ip = "100.97.53.84"
         self.server_port = 8080
     
-    async def download(self, url: str, download_id: str) -> dict:
+    async def download(self, url: str, download_id: str, progress_msg=None) -> dict:
+        import asyncio
+        import concurrent.futures
+        
         temp_dir = TEMP_DIR / f"yt_{download_id}"
         temp_dir.mkdir(exist_ok=True)
-        try:
+        
+        async def update_progress(text):
+            if progress_msg:
+                try:
+                    await progress_msg.edit_text(text)
+                except:
+                    pass
+        
+        def download_sync():
             from yt_dlp import YoutubeDL
             ydl_opts = {
                 'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best[ext=mp4]/best',
-                'outtmpl': str(temp_dir / "%(title)s.%(ext)s"),
+                'outtmpl': str(temp_dir / "yt_%(id)s.%(ext)s"),
                 'prefer_free_formats': True,
             }
             with YoutubeDL(ydl_opts) as ydl:
-                info = ydl.extract_info(url, download=True)
+                ydl.download([url])
+        
+        try:
+            loop = asyncio.get_event_loop()
+            with concurrent.futures.ThreadPoolExecutor() as executor:
+                await loop.run_in_executor(executor, download_sync)
             
             files = list(temp_dir.iterdir())
             if files:
@@ -300,6 +316,11 @@ class YouTubeDownloader:
                 shutil.move(str(video_file), str(dest_file))
                 shutil.rmtree(temp_dir, ignore_errors=True)
                 download_url = f"http://{self.server_ip}:{self.server_port}/{safe_name}"
+                
+                from yt_dlp import YoutubeDL
+                ydl = YoutubeDL({'quiet': True})
+                info = ydl.extract_info(url, download=False)
+                
                 return {
                     "success": True, 
                     "file": str(dest_file), 
@@ -400,11 +421,23 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             else:
                 await msg.edit_text(f"❌ {res['error']}")
         else:
+            await msg.edit_text("⏳ Downloading YouTube video...")
             res = await yt_downloader.download(url, download_id)
             if res["success"]:
                 await msg.edit_text(f"✅ Downloaded: {res['title']}\n\n📥 Download: {res['download_url']}")
     except Exception as e:
         await msg.edit_text(f"❌ Error: {e}")
+
+async def error_handler(update, context):
+    error_msg = str(context.error)
+    print(f"❌ Error: {error_msg}")
+    logger.error(f"Error: {error_msg}")
+    
+    if update and update.message:
+        try:
+            await update.message.reply_text(f"❌ Error: {error_msg[:500]}")
+        except:
+            pass
 
 def main():
     file_server.start()
@@ -413,6 +446,7 @@ def main():
     
     app = Application.builder().token(BOT_TOKEN).build()
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+    app.add_error_handler(error_handler)
     app.run_polling(drop_pending_updates=True)
 
 if __name__ == "__main__":
