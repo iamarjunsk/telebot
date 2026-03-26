@@ -21,7 +21,7 @@ except ImportError:
     pass
 
 import instaloader
-from telegram import Update
+from telegram import Update, InputMediaPhoto, InputMediaVideo
 from telegram.ext import (
     Application,
     CommandHandler,
@@ -342,23 +342,36 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if platform == "instagram":
             res = await ig_downloader.download(url, download_id)
             if res["success"]:
+                small_files = []
+                large_files = []
+                
                 for f in res["files"]:
                     file_size = Path(f).stat().st_size
                     if file_size > MAX_UPLOAD_SIZE:
                         filename = f"{download_id}_{Path(f).name}"
                         dest = TEMP_DIR / filename
                         shutil.move(f, dest)
-                        link = f"http://{SERVER_IP}:{SERVER_PORT}/{filename}"
-                        await msg.edit_text(f"📎 File too large for Telegram: {Path(f).name}\n\n🔗 Download: {link}\n\n⏰ Link expires in 1 hour")
+                        large_files.append((Path(f).name, dest))
                     else:
-                        await msg.edit_text("📤 Sending...")
+                        small_files.append(f)
+                
+                if large_files:
+                    links = "\n".join([f"🔗 {name}: http://{SERVER_IP}:{SERVER_PORT}/{dest.name}" for name, dest in large_files])
+                    await msg.edit_text(f"📎 Large files:\n{links}\n\n⏰ Links expire in 1 hour")
+                
+                if small_files:
+                    media_group = []
+                    for i, f in enumerate(small_files):
                         with open(f, 'rb') as file:
                             if f.lower().endswith(('.mp4', '.mov')):
-                                await update.message.reply_video(video=file, caption=f"👤 @{res['author']}", read_timeout=300, write_timeout=300)
+                                media_group.append(InputMediaVideo(file, caption=f"👤 @{res['author']}" if i == 0 else None))
                             else:
-                                await update.message.reply_photo(photo=file, read_timeout=300, write_timeout=300)
-                        shutil.rmtree(res["temp_dir"], ignore_errors=True)
-                        await msg.delete()
+                                media_group.append(InputMediaPhoto(file))
+                    await msg.edit_text(f"📤 Sending album...")
+                    await update.message.reply_media_group(media_group, read_timeout=300)
+                
+                shutil.rmtree(res["temp_dir"], ignore_errors=True)
+                await msg.delete()
             else:
                 await msg.edit_text(f"❌ {res['error']}")
         else:
