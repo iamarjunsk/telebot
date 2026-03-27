@@ -324,6 +324,45 @@ class YouTubeDownloader:
 yt_downloader = YouTubeDownloader()
 
 # ============================================================================
+# TWITTER/X DOWNLOADER
+# ============================================================================
+
+class TwitterDownloader:
+    async def download(self, url: str, download_id: str) -> dict:
+        temp_dir = TEMP_DIR / f"tw_{download_id}"
+        temp_dir.mkdir(exist_ok=True)
+        try:
+            from yt_dlp import YoutubeDL
+            ydl_opts = {
+                'format': 'best[filesize<50M]/best',
+                'outtmpl': str(temp_dir / "tw_%(id)s.%(ext)s"),
+                'retries': 5,
+                'socket_timeout': 30,
+                'fragment_retries': 5,
+                'http_headers': {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/605.1.15 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/605.1.15',
+                },
+            }
+            with YoutubeDL(ydl_opts) as ydl:
+                info = ydl.extract_info(url, download=True)
+            
+            files = list(temp_dir.iterdir())
+            if files:
+                video_file = max(files, key=lambda x: x.stat().st_size)
+                return {
+                    "success": True,
+                    "file": str(video_file),
+                    "title": info.get('description', '')[:400],
+                    "author": info.get('uploader', 'unknown'),
+                    "temp_dir": str(temp_dir)
+                }
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+        return {"success": False, "error": "Download failed"}
+
+tw_downloader = TwitterDownloader()
+
+# ============================================================================
 # BOT HANDLERS
 # ============================================================================
 
@@ -333,6 +372,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         platform = "instagram"
     elif "youtube.com" in url or "youtu.be" in url:
         platform = "youtube"
+    elif "x.com" in url or "twitter.com" in url:
+        platform = "twitter"
     else: return
 
     msg = await update.message.reply_text(f"⏳ Downloading from {platform}...")
@@ -360,18 +401,55 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     await msg.edit_text(f"📎 Large files:\n{links}\n\n⏰ Links expire in 1 hour")
                 
                 if small_files:
-                    media_group = []
-                    for i, f in enumerate(small_files):
-                        with open(f, 'rb') as file:
-                            if f.lower().endswith(('.mp4', '.mov')):
-                                media_group.append(InputMediaVideo(file, caption=f"👤 @{res['author']}" if i == 0 else None))
-                            else:
-                                media_group.append(InputMediaPhoto(file))
                     await msg.edit_text(f"📤 Sending album...")
-                    await update.message.reply_media_group(media_group, read_timeout=300)
+                    batch_size = 10
+                    for batch_idx in range(0, len(small_files), batch_size):
+                        batch = small_files[batch_idx:batch_idx + batch_size]
+                        media_group = []
+                        for i, f in enumerate(batch):
+                            with open(f, 'rb') as file:
+                                if f.lower().endswith(('.mp4', '.mov')):
+                                    media_group.append(InputMediaVideo(file, caption=f"👤 @{res['author']}" if batch_idx + i == 0 else None))
+                                else:
+                                    media_group.append(InputMediaPhoto(file))
+                        await update.message.reply_media_group(media_group, read_timeout=300)
                 
                 shutil.rmtree(res["temp_dir"], ignore_errors=True)
                 await msg.delete()
+            else:
+                await msg.edit_text(f"❌ {res['error']}")
+        elif platform == "youtube":
+            res = await yt_downloader.download(url, download_id)
+            if res["success"]:
+                file_size = Path(res["file"]).stat().st_size
+                if file_size > MAX_UPLOAD_SIZE:
+                    filename = f"{download_id}_{Path(res['file']).name}"
+                    dest = TEMP_DIR / filename
+                    shutil.move(res["file"], dest)
+                    link = f"http://{SERVER_IP}:{SERVER_PORT}/{filename}"
+                    await msg.edit_text(f"📎 File too large for Telegram: {res['title']}\n\n🔗 Download: {link}\n\n⏰ Link expires in 1 hour")
+                else:
+                    with open(res["file"], 'rb') as f:
+                        await update.message.reply_video(video=f, caption=res['title'], read_timeout=300, write_timeout=300)
+                    shutil.rmtree(res["temp_dir"], ignore_errors=True)
+                    await msg.delete()
+            else:
+                await msg.edit_text(f"❌ {res['error']}")
+        elif platform == "twitter":
+            res = await tw_downloader.download(url, download_id)
+            if res["success"]:
+                file_size = Path(res["file"]).stat().st_size
+                if file_size > MAX_UPLOAD_SIZE:
+                    filename = f"{download_id}_{Path(res['file']).name}"
+                    dest = TEMP_DIR / filename
+                    shutil.move(res["file"], dest)
+                    link = f"http://{SERVER_IP}:{SERVER_PORT}/{filename}"
+                    await msg.edit_text(f"📎 File too large for Telegram: {res['title'][:200]}\n\n🔗 Download: {link}\n\n⏰ Link expires in 1 hour")
+                else:
+                    with open(res["file"], 'rb') as f:
+                        await update.message.reply_video(video=f, caption=res.get('title', '')[:1000], read_timeout=300, write_timeout=300)
+                    shutil.rmtree(res["temp_dir"], ignore_errors=True)
+                    await msg.delete()
             else:
                 await msg.edit_text(f"❌ {res['error']}")
         else:
