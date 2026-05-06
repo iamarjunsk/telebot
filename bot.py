@@ -99,7 +99,19 @@ class InstagramDownloader:
     def _login(self):
         session_file = BASE_DIR / f"session_{IG_USERNAME}"
         
-        # 1. Try browser cookies first ( freshest, auto-updated by system browser )
+        # Check if session file is too old (>12 hours) — Instagram sessions expire quickly
+        if session_file.exists():
+            age_hours = (time.time() - session_file.stat().st_mtime) / 3600
+            if age_hours > 12:
+                print(f"⚠️ Session file is {age_hours:.1f} hours old. Deleting for fresh login...")
+                try:
+                    session_file.unlink()
+                    if COOKIE_FILE.exists():
+                        COOKIE_FILE.unlink()
+                except Exception:
+                    pass
+        
+        # 1. Try browser cookies first (freshest, auto-updated by system browser)
         if self._load_browser_cookies():
             print("✅ Logged in via system browser cookies")
             self.L.save_session_to_file(str(session_file))
@@ -119,7 +131,7 @@ class InstagramDownloader:
             except Exception as e:
                 print(f"⚠️ Session file failed: {e}")
 
-        # 3. Try headless browser login (macOS-friendly, bypasses sandbox)
+        # 3. Try headless browser login
         if IG_USERNAME and IG_PASSWORD:
             if self._playwright_login():
                 self.L.save_session_to_file(str(session_file))
@@ -486,18 +498,45 @@ class InstagramDownloader:
         if self.is_story_url(url):
             temp_dir = TEMP_DIR / f"ig_{download_id}"
             temp_dir.mkdir(exist_ok=True)
-            # Try instaloader first (has valid session)
+            
+            # Strategy for stories:
+            # 1. Try yt-dlp ANONYMOUS first (often works for public stories without login)
+            # 2. Try yt-dlp with browser cookies
+            # 3. Try instaloader with our session
+            # 4. Try web API fallback
+            
+            if self.yt_dlp_available:
+                # 1. Anonymous
+                print("📥 Story: trying yt-dlp anonymous...")
+                result = await self._download_with_ytdlp(url, temp_dir, use_auth=False)
+                if result.get("success"):
+                    return result
+                
+                # 2. With browser cookies / auth
+                print("🔄 Story: trying yt-dlp with auth...")
+                result = await self._download_with_ytdlp(url, temp_dir, use_auth=True)
+                if result.get("success"):
+                    return result
+            
+            # 3. curl_cffi browser impersonation
+            print("🔄 Story: trying curl_cffi browser impersonation...")
+            result = await self._download_story_curl_cffi(url, temp_dir)
+            if result.get("success"):
+                return result
+            
+            # 4. Instaloader
+            print("🔄 Story: trying instaloader...")
             result = await self.download_story(url, download_id)
             if result.get("success"):
                 return result
-            # If instaloader failed with login error and we couldn't fix it, don't bother with yt-dlp
-            error_str = str(result.get("error", "")).lower()
-            if "login" in error_str or "session expired" in error_str:
+            
+            # 5. Web API fallback
+            print("🔄 Story: trying web API fallback...")
+            result = await self._download_via_web_api(url, temp_dir)
+            if result.get("success"):
                 return result
-            if self.yt_dlp_available:
-                print("🔄 Story download via instaloader failed, trying yt-dlp...")
-                return await self._download_with_ytdlp(url, temp_dir)
-            return result
+            
+            return result if result else {"success": False, "error": "Story download failed. Content may be private or expired."}
         
         temp_dir = TEMP_DIR / f"ig_{download_id}"
         temp_dir.mkdir(exist_ok=True)
@@ -558,7 +597,7 @@ class InstagramDownloader:
         
         return {"success": False, "error": "Download failed after multiple attempts. Content may be private, restricted, or rate-limited."}
 
-    async def _download_with_ytdlp(self, url: str, temp_dir: Path, retry_count: int = 0) -> dict:
+    async def _download_with_ytdlp(self, url: str, temp_dir: Path, retry_count: int = 0, use_auth: bool = True) -> dict:
         max_retries = 2
         try:
             from yt_dlp import YoutubeDL
@@ -575,7 +614,7 @@ class InstagramDownloader:
                 'retries': 5,
                 'socket_timeout': 30,
                 'http_headers': {
-                    'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
                     'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
                     'Accept-Language': 'en-US,en;q=0.9',
                     'Accept-Encoding': 'gzip, deflate, br',
@@ -588,18 +627,22 @@ class InstagramDownloader:
                 },
             }
             
-            # Prefer live exported cookies, then browser, then username/password
-            if COOKIE_FILE.exists():
-                ydl_opts['cookiefile'] = str(COOKIE_FILE)
+            if use_auth:
+                # Prefer live exported cookies, then browser, then username/password
+                if COOKIE_FILE.exists():
+                    ydl_opts['cookiefile'] = str(COOKIE_FILE)
+                else:
+                    # Try to read directly from system browser
+                    if sys.platform == "darwin":
+                        ydl_opts['cookiesfrombrowser'] = ('safari',)
+                    elif sys.platform == "win32":
+                        ydl_opts['cookiesfrombrowser'] = ('chrome',)
+                    elif IG_USERNAME and IG_PASSWORD:
+                        ydl_opts['username'] = IG_USERNAME
+                        ydl_opts['password'] = IG_PASSWORD
             else:
-                # Try to read directly from system browser as fallback
-                if sys.platform == "darwin":
-                    ydl_opts['cookiesfrombrowser'] = ('safari',)
-                elif sys.platform == "win32":
-                    ydl_opts['cookiesfrombrowser'] = ('chrome',)
-                elif IG_USERNAME and IG_PASSWORD:
-                    ydl_opts['username'] = IG_USERNAME
-                    ydl_opts['password'] = IG_PASSWORD
+                # Anonymous mode — no cookies, no login
+                ydl_opts['http_headers']['User-Agent'] = 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1'
 
             with YoutubeDL(ydl_opts) as ydl:
                 info = ydl.extract_info(url, download=True)
@@ -618,10 +661,253 @@ class InstagramDownloader:
                 wait_time = (retry_count + 1) * 3
                 print(f"⚠️ Rate limited, waiting {wait_time}s before retry ({retry_count + 1}/{max_retries})...")
                 await asyncio.sleep(wait_time)
-                return await self._download_with_ytdlp(url, temp_dir, retry_count + 1)
+                return await self._download_with_ytdlp(url, temp_dir, retry_count + 1, use_auth=use_auth)
             
             return {"success": False, "error": f"yt-dlp failed: {error_msg[:100]}"}
         return {"success": False, "error": "No files found."}
+
+    async def _download_via_web_api(self, url: str, temp_dir: Path) -> dict:
+        """Fallback: use third-party web API to download Instagram content."""
+        try:
+            import requests
+            import json
+            
+            print("   Trying savefrom.net API...")
+            
+            # savefrom.net API
+            api_url = "https://worker.savefrom.net/savefrom.php"
+            payload = {
+                "sf_url": url,
+                "sf_submit": "",
+                "new": "2",
+                "lang": "en",
+                "app": "",
+                "country": "us",
+                "os": "Windows",
+                "browser": "Chrome",
+            }
+            headers = {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                "Accept": "application/json, text/javascript, */*",
+                "Accept-Language": "en-US,en;q=0.9",
+                "Origin": "https://savefrom.net",
+                "Referer": "https://savefrom.net/",
+            }
+            
+            resp = requests.post(api_url, data=payload, headers=headers, timeout=30)
+            if resp.status_code != 200:
+                return {"success": False, "error": f"Web API returned {resp.status_code}"}
+            
+            # Parse response — it can be HTML or JSON
+            content = resp.text
+            
+            # Look for direct media URLs in the response
+            media_urls = []
+            
+            # Try JSON parsing first
+            try:
+                data = resp.json()
+                if isinstance(data, dict):
+                    # Various possible response formats
+                    for key in ["url", "download_url", "video_url", "media_url", "src"]:
+                        if key in data and data[key]:
+                            media_urls.append(data[key])
+                    # Nested structures
+                    if "data" in data and isinstance(data["data"], list):
+                        for item in data["data"]:
+                            if isinstance(item, dict):
+                                for key in ["url", "download_url", "video_url", "media_url"]:
+                                    if key in item and item[key]:
+                                        media_urls.append(item[key])
+            except (json.JSONDecodeError, ValueError):
+                pass
+            
+            # Fallback: regex extract URLs from HTML/text
+            if not media_urls:
+                # Look for mp4/jpg URLs
+                found = re.findall(r'https?://[^\s"\'<>]+\.(?:mp4|jpg|jpeg|png)', content)
+                media_urls.extend(found)
+                
+                # Look for data-url attributes
+                found2 = re.findall(r'data-url="(https?://[^"]+)"', content)
+                media_urls.extend(found2)
+                
+                # Look for href download links
+                found3 = re.findall(r'href="(https?://[^"]+)"[^>]*download', content)
+                media_urls.extend(found3)
+            
+            if not media_urls:
+                return {"success": False, "error": "Web API: no media URLs found in response"}
+            
+            # Download the media files
+            downloaded_files = []
+            for i, media_url in enumerate(media_urls[:5]):  # Max 5 files
+                try:
+                    file_resp = requests.get(media_url, headers={
+                        "User-Agent": headers["User-Agent"],
+                        "Referer": "https://savefrom.net/",
+                    }, timeout=60, stream=True)
+                    
+                    if file_resp.status_code == 200:
+                        # Determine extension from content-type or URL
+                        content_type = file_resp.headers.get('Content-Type', '')
+                        if 'video' in content_type:
+                            ext = '.mp4'
+                        elif 'image' in content_type:
+                            ext = '.jpg'
+                        else:
+                            ext = '.mp4' if '.mp4' in media_url else '.jpg'
+                        
+                        file_path = temp_dir / f"webapi_{i}{ext}"
+                        with open(file_path, 'wb') as f:
+                            for chunk in file_resp.iter_content(chunk_size=8192):
+                                f.write(chunk)
+                        downloaded_files.append(str(file_path))
+                        print(f"   Downloaded via web API: {file_path.name}")
+                except Exception as e:
+                    print(f"   Failed to download media URL: {e}")
+                    continue
+            
+            if downloaded_files:
+                return {
+                    "success": True, "files": downloaded_files, "method": "web-api",
+                    "caption": "", "author": "unknown", "temp_dir": str(temp_dir)
+                }
+            
+            return {"success": False, "error": "Web API: failed to download media files"}
+            
+        except Exception as e:
+            return {"success": False, "error": f"Web API failed: {str(e)[:80]}"}
+
+    async def _download_story_curl_cffi(self, url: str, temp_dir: Path) -> dict:
+        """Use curl_cffi to impersonate a real browser and scrape the story page."""
+        try:
+            from curl_cffi import requests as curl_requests
+            import json
+            
+            print("   Trying curl_cffi browser impersonation...")
+            
+            story_info = self.is_story_url(url)
+            if not story_info:
+                return {"success": False, "error": "Invalid story URL"}
+            
+            username, story_id = story_info
+            
+            # Create a session that impersonates Chrome 120
+            session = curl_requests.Session(impersonate="chrome120")
+            
+            # Fetch the story page
+            headers = {
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+                "Accept-Language": "en-US,en;q=0.9",
+                "Accept-Encoding": "gzip, deflate, br",
+                "Referer": "https://www.instagram.com/",
+            }
+            
+            # Add cookies from our instaloader session if available
+            session_cookies = self.L.context._session.cookies if hasattr(self.L.context, '_session') and self.L.context._session else None
+            if session_cookies:
+                for cookie in session_cookies:
+                    if "instagram" in (cookie.domain or ""):
+                        session.cookies.set(cookie.name, cookie.value, domain=cookie.domain, path=cookie.path or "/")
+            
+            resp = session.get(url, headers=headers, timeout=30)
+            if resp.status_code != 200:
+                return {"success": False, "error": f"curl_cffi got status {resp.status_code}"}
+            
+            html_content = resp.text
+            
+            # Extract embedded JSON data
+            media_urls = []
+            
+            # Method 1: Look for window._sharedData
+            shared_data_match = re.search(r'window\._sharedData\s*=\s*({.+?});</script>', html_content, re.DOTALL)
+            if shared_data_match:
+                try:
+                    data = json.loads(shared_data_match.group(1))
+                    media = data.get("entry_data", {}).get("StoriesPage", [{}])[0].get("media", {})
+                    if media:
+                        video_url = media.get("video_url")
+                        if video_url:
+                            media_urls.append(video_url)
+                        display_url = media.get("display_url")
+                        if display_url:
+                            media_urls.append(display_url)
+                except (json.JSONDecodeError, IndexError, KeyError):
+                    pass
+            
+            # Method 2: Look for window.__additionalDataLoaded
+            additional_data_match = re.search(r'window\.__additionalDataLoaded\s*\(\s*[\'"][^\'"]+[\'"]\s*,\s*({.+?})\s*\);</script>', html_content, re.DOTALL)
+            if additional_data_match:
+                try:
+                    data = json.loads(additional_data_match.group(1))
+                    items = data.get("items", [])
+                    for item in items:
+                        video_versions = item.get("video_versions", [])
+                        if video_versions:
+                            media_urls.append(video_versions[0].get("url"))
+                        image_versions = item.get("image_versions2", {}).get("candidates", [])
+                        if image_versions:
+                            media_urls.append(image_versions[0].get("url"))
+                except (json.JSONDecodeError, KeyError):
+                    pass
+            
+            # Method 3: Look for meta tags
+            og_video_match = re.search(r'<meta[^>]+property=[\'"]og:video[\'"][^>]+content=[\'"]([^\'"]+)[\'"]', html_content)
+            if og_video_match:
+                media_urls.append(og_video_match.group(1))
+            
+            og_image_match = re.search(r'<meta[^>]+property=[\'"]og:image[\'"][^>]+content=[\'"]([^\'"]+)[\'"]', html_content)
+            if og_image_match:
+                media_urls.append(og_image_match.group(1))
+            
+            # Method 4: Generic regex for CDN URLs
+            cdn_urls = re.findall(r'https?://[^\s"\'<>]+\.cdninstagram\.com/[^\s"\'<>]+\.(?:mp4|jpg)', html_content)
+            media_urls.extend(cdn_urls)
+            
+            # Remove duplicates and None values
+            media_urls = list(dict.fromkeys([u for u in media_urls if u]))
+            
+            if not media_urls:
+                return {"success": False, "error": "curl_cffi: no media URLs found in page"}
+            
+            # Download media files
+            downloaded_files = []
+            for i, media_url in enumerate(media_urls[:3]):
+                try:
+                    file_resp = session.get(media_url, headers={
+                        "Referer": "https://www.instagram.com/",
+                        "Accept": "*/*",
+                    }, timeout=60)
+                    
+                    if file_resp.status_code == 200:
+                        content_type = file_resp.headers.get('Content-Type', '')
+                        if 'video' in content_type or '.mp4' in media_url:
+                            ext = '.mp4'
+                        else:
+                            ext = '.jpg'
+                        
+                        file_path = temp_dir / f"curlcffi_{i}{ext}"
+                        with open(file_path, 'wb') as f:
+                            f.write(file_resp.content)
+                        downloaded_files.append(str(file_path))
+                        print(f"   Downloaded via curl_cffi: {file_path.name}")
+                except Exception as e:
+                    print(f"   Failed to download media URL: {e}")
+                    continue
+            
+            if downloaded_files:
+                return {
+                    "success": True, "files": downloaded_files, "method": "curl-cffi",
+                    "caption": "", "author": username, "temp_dir": str(temp_dir)
+                }
+            
+            return {"success": False, "error": "curl_cffi: failed to download media"}
+            
+        except ImportError:
+            return {"success": False, "error": "curl_cffi not installed"}
+        except Exception as e:
+            return {"success": False, "error": f"curl_cffi failed: {str(e)[:80]}"}
 
     def _collect_files(self, temp_dir: Path) -> list:
         return [str(f) for f in temp_dir.iterdir() if f.suffix.lower() in ['.jpg', '.jpeg', '.png', '.mp4', '.mov']]
