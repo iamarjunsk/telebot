@@ -99,33 +99,354 @@ class InstagramDownloader:
     def _login(self):
         session_file = BASE_DIR / f"session_{IG_USERNAME}"
         
-        # 1. Try to load session file (Copied from Mac)
+        # 1. Try browser cookies first ( freshest, auto-updated by system browser )
+        if self._load_browser_cookies():
+            print("✅ Logged in via system browser cookies")
+            self.L.save_session_to_file(str(session_file))
+            self._export_cookies_to_ytdlp()
+            return
+        
+        # 2. Try to load saved session file
         if session_file.exists():
             try:
                 self.L.load_session_from_file(IG_USERNAME, str(session_file))
-                print(f"✅ Loaded Instagram session from file: {session_file.name}")
-                return
+                if self._validate_session():
+                    print(f"✅ Loaded Instagram session from file: {session_file.name}")
+                    self._export_cookies_to_ytdlp()
+                    return
+                else:
+                    print("⚠️ Session file loaded but validation failed (expired)")
             except Exception as e:
                 print(f"⚠️ Session file failed: {e}")
 
-        # 2. Try regular login
+        # 3. Try headless browser login (macOS-friendly, bypasses sandbox)
+        if IG_USERNAME and IG_PASSWORD:
+            if self._playwright_login():
+                self.L.save_session_to_file(str(session_file))
+                self._export_cookies_to_ytdlp()
+                return
+
+        # 4. Try regular login
         if IG_USERNAME and IG_PASSWORD:
             try:
-                print(f"🔑 Attempting login for {IG_USERNAME}...")
+                print(f"🔑 Attempting direct API login for {IG_USERNAME}...")
                 self.L.login(IG_USERNAME, IG_PASSWORD)
                 self.L.save_session_to_file(str(session_file))
                 print("✅ Login successful and session saved")
+                self._export_cookies_to_ytdlp()
             except Exception as e:
                 print(f"❌ Password login failed: {e}")
-                print("💡 Tip: Copy the session file from your Mac to this folder.")
+                print("💡 Tip: Log into Instagram in Chrome/Safari on this machine.")
+    
+    def _playwright_login(self) -> bool:
+        """Use headless browser to log into Instagram and extract cookies."""
+        try:
+            from playwright.sync_api import sync_playwright
+            import requests
+            
+            print("🎭 Starting headless browser login...")
+            
+            with sync_playwright() as p:
+                browser = p.chromium.launch(headless=True)
+                context = browser.new_context(
+                    user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                    viewport={"width": 1280, "height": 800},
+                )
+                page = context.new_page()
+                
+                # Go to login page
+                page.goto("https://www.instagram.com/accounts/login/", wait_until="networkidle")
+                page.wait_for_timeout(2500)
+                
+                # Accept cookies if prompted
+                try:
+                    accept_selectors = [
+                        "button:has-text('Allow all cookies')",
+                        "button:has-text('Accept')", 
+                        "button:has-text('Allow essential and optional cookies')",
+                        "[role='button']:has-text('Allow all cookies')",
+                    ]
+                    for sel in accept_selectors:
+                        btn = page.locator(sel).first
+                        if btn.is_visible(timeout=2000):
+                            btn.click()
+                            page.wait_for_timeout(1000)
+                            break
+                except:
+                    pass
+                
+                # Check if already logged in (redirected to home)
+                current_url = page.url
+                if "instagram.com" in current_url and "login" not in current_url:
+                    print("   Already logged in (redirected from login page)")
+                else:
+                    # Fill login form with multiple selector fallbacks
+                    username_filled = False
+                    for username_sel in ["input[name='username']", "input[aria-label='Phone number, username, or email']", "input[type='text']"]:
+                        try:
+                            page.locator(username_sel).first.fill(IG_USERNAME)
+                            username_filled = True
+                            break
+                        except:
+                            continue
+                    
+                    password_filled = False
+                    for pwd_sel in ["input[name='password']", "input[aria-label='Password']", "input[type='password']"]:
+                        try:
+                            page.locator(pwd_sel).first.fill(IG_PASSWORD)
+                            password_filled = True
+                            break
+                        except:
+                            continue
+                    
+                    if not username_filled or not password_filled:
+                        print("   Could not find login form fields. Instagram UI may have changed.")
+                        browser.close()
+                        return False
+                    
+                    # Click login button
+                    for btn_sel in ["button[type='submit']", "[role='button']:has-text('Log in')", "button:has-text('Log in')"]:
+                        try:
+                            page.locator(btn_sel).first.click()
+                            break
+                        except:
+                            continue
+                    
+                    # Wait for navigation after login
+                    page.wait_for_timeout(4000)
+                    try:
+                        page.wait_for_load_state("networkidle", timeout=10000)
+                    except:
+                        pass
+                
+                page.wait_for_timeout(2000)
+                
+                # Check for 2FA / challenge / suspicious login
+                current_url = page.url
+                if any(x in current_url for x in ["challenge", "two_factor", "confirm_email", "suspicious"]):
+                    print("   ⚠️ Instagram requires 2FA/challenge. Complete it in a real browser first.")
+                    browser.close()
+                    return False
+                
+                # Check if login succeeded by looking for logged-in indicators
+                logged_in = False
+                for indicator in ["a[href='/direct/inbox/']", "[aria-label='Direct']", "nav", "[role='navigation']", "svg[aria-label='Home']"]:
+                    try:
+                        if page.locator(indicator).first.is_visible(timeout=3000):
+                            logged_in = True
+                            break
+                    except:
+                        continue
+                
+                if not logged_in and "login" in page.url:
+                    # Check for error message
+                    error_selectors = [
+                        "[data-testid='login-error-message']",
+                        "#slfErrorAlert",
+                        "p:has-text('password was incorrect')",
+                        "p:has-text('username')",
+                    ]
+                    for sel in error_selectors:
+                        try:
+                            if page.locator(sel).first.is_visible(timeout=2000):
+                                print("   ❌ Instagram rejected the login credentials.")
+                                browser.close()
+                                return False
+                        except:
+                            continue
+                    
+                    print("   ⚠️ Still on login page. Login may have failed.")
+                    browser.close()
+                    return False
+                
+                # Extract cookies
+                cookies = context.cookies()
+                ig_cookies = [c for c in cookies if "instagram" in c.get("domain", "")]
+                print(f"   Extracted {len(ig_cookies)} Instagram cookies from browser")
+                
+                if len(ig_cookies) < 3:
+                    print("   ⚠️ Too few cookies extracted. Login may have failed.")
+                    browser.close()
+                    return False
+                
+                # Build requests session and inject into instaloader
+                session = requests.Session()
+                session.headers.update({
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                    "Accept-Language": "en-US,en;q=0.9",
+                })
+                
+                for c in ig_cookies:
+                    session.cookies.set(
+                        name=c["name"],
+                        value=c["value"],
+                        domain=c["domain"],
+                        path=c.get("path", "/"),
+                        secure=c.get("secure", True),
+                        expires=c.get("expires"),
+                    )
+                
+                self.L.context._session = session
+                browser.close()
+            
+            # Validate the session
+            if self._validate_session():
+                print("✅ Headless browser login successful")
+                return True
+            else:
+                print("⚠️ Browser login appeared to succeed but session is invalid")
+                return False
+                
+        except ImportError:
+            print("   Playwright not installed. Run: pip install playwright && python -m playwright install chromium")
+            return False
+        except Exception as e:
+            print(f"   Headless browser login failed: {e}")
+            return False
+    
+    def _load_browser_cookies(self) -> bool:
+        """Extract Instagram cookies from system browser and inject into instaloader session."""
+        try:
+            import browser_cookie3
+            import requests
+            import sys
+            
+            print("🌐 Trying to load Instagram cookies from system browser...")
+            
+            # Reorder browsers by OS (most common first)
+            if sys.platform == "darwin":
+                browsers = [
+                    browser_cookie3.safari,
+                    browser_cookie3.chrome,
+                    browser_cookie3.firefox,
+                    browser_cookie3.edge,
+                ]
+            elif sys.platform == "win32":
+                browsers = [
+                    browser_cookie3.chrome,
+                    browser_cookie3.edge,
+                    browser_cookie3.firefox,
+                ]
+            else:  # Linux
+                browsers = [
+                    browser_cookie3.chrome,
+                    browser_cookie3.firefox,
+                    browser_cookie3.edge,
+                ]
+            
+            jar = None
+            found_browser = None
+            for browser_fn in browsers:
+                try:
+                    jar = browser_fn(domain_name="instagram.com")
+                    if jar:
+                        cookies_list = list(jar)
+                        ig_cookies = [c for c in cookies_list if "instagram" in c.domain]
+                        if len(ig_cookies) >= 3:
+                            found_browser = browser_fn.__name__
+                            print(f"   Found {len(ig_cookies)} Instagram cookies from {found_browser}")
+                            break
+                except Exception:
+                    continue
+            
+            if not jar or not found_browser:
+                print("   No browser cookies found. Log into Instagram in Chrome/Edge.")
+                return False
+            
+            session = requests.Session()
+            for cookie in jar:
+                if "instagram" in cookie.domain:
+                    session.cookies.set(
+                        name=cookie.name,
+                        value=cookie.value,
+                        domain=cookie.domain,
+                        path=cookie.path or "/",
+                        secure=cookie.secure,
+                        expires=cookie.expires,
+                    )
+            
+            self.L.context._session = session
+            
+            if self._validate_session():
+                return True
+            else:
+                print("   Browser cookies loaded but session invalid (maybe wrong account?)")
+                return False
+                
+        except ImportError:
+            print("   browser_cookie3 not installed. Run: pip install browser_cookie3")
+            return False
+        except Exception as e:
+            print(f"   Browser cookie load failed: {e}")
+            return False
+    
+    def _validate_session(self) -> bool:
+        """Check if the current session is actually valid by fetching own profile."""
+        try:
+            from instaloader import Profile
+            profile = Profile.from_username(self.L.context, IG_USERNAME)
+            # Try accessing a property that requires login
+            _ = profile.userid
+            return True
+        except Exception as e:
+            print(f"🔍 Session validation error: {e}")
+            return False
+    
+    def _export_cookies_to_ytdlp(self):
+        """Export instaloader's live session cookies to a Netscape cookies.txt for yt-dlp."""
+        try:
+            import http.cookiejar as cookiejar
+            
+            session = self.L.context._session
+            if not session or not session.cookies:
+                return
+                
+            cj = cookiejar.MozillaCookieJar(str(COOKIE_FILE))
+            for cookie in session.cookies:
+                # Build rest dict for HttpOnly flag
+                rest = {}
+                if hasattr(cookie, '_rest') and cookie._rest and cookie._rest.get("HttpOnly"):
+                    rest = {"HttpOnly": ""}
+                
+                # Convert requests cookie to cookielib cookie
+                c = cookiejar.Cookie(
+                    version=0,
+                    name=cookie.name,
+                    value=cookie.value,
+                    port=None,
+                    port_specified=False,
+                    domain=cookie.domain if cookie.domain else ".instagram.com",
+                    domain_specified=bool(cookie.domain),
+                    domain_initial_dot=cookie.domain.startswith(".") if cookie.domain else True,
+                    path=cookie.path if cookie.path else "/",
+                    path_specified=bool(cookie.path),
+                    secure=cookie.secure,
+                    expires=cookie.expires if cookie.expires else None,
+                    discard=False,
+                    comment=None,
+                    comment_url=None,
+                    rest=rest,
+                    rfc2109=False,
+                )
+                cj.set_cookie(c)
+            cj.save(ignore_discard=True, ignore_expires=True)
+            print(f"🍪 Exported live session cookies to {COOKIE_FILE.name}")
+        except Exception as e:
+            print(f"⚠️ Cookie export failed: {e}")
 
     async def download(self, url: str, download_id: str) -> dict:
         if self.is_story_url(url):
+            temp_dir = TEMP_DIR / f"ig_{download_id}"
+            temp_dir.mkdir(exist_ok=True)
+            # Try instaloader first (has valid session), fall back to yt-dlp
+            result = await self.download_story(url, download_id)
+            if result.get("success"):
+                return result
             if self.yt_dlp_available:
-                temp_dir = TEMP_DIR / f"ig_{download_id}"
-                temp_dir.mkdir(exist_ok=True)
+                print("🔄 Story download via instaloader failed, trying yt-dlp...")
                 return await self._download_with_ytdlp(url, temp_dir)
-            return await self.download_story(url, download_id)
+            return result
         
         temp_dir = TEMP_DIR / f"ig_{download_id}"
         temp_dir.mkdir(exist_ok=True)
@@ -216,12 +537,18 @@ class InstagramDownloader:
                 },
             }
             
-            if IG_USERNAME and IG_PASSWORD:
-                ydl_opts['username'] = IG_USERNAME
-                ydl_opts['password'] = IG_PASSWORD
-            
+            # Prefer live exported cookies, then browser, then username/password
             if COOKIE_FILE.exists():
                 ydl_opts['cookiefile'] = str(COOKIE_FILE)
+            else:
+                # Try to read directly from system browser as fallback
+                if sys.platform == "darwin":
+                    ydl_opts['cookiesfrombrowser'] = ('safari',)
+                elif sys.platform == "win32":
+                    ydl_opts['cookiesfrombrowser'] = ('chrome',)
+                elif IG_USERNAME and IG_PASSWORD:
+                    ydl_opts['username'] = IG_USERNAME
+                    ydl_opts['password'] = IG_PASSWORD
 
             with YoutubeDL(ydl_opts) as ydl:
                 info = ydl.extract_info(url, download=True)
@@ -270,12 +597,19 @@ class InstagramDownloader:
         
         try:
             print(f"📥 Downloading story: {username} ({story_id})")
-            from instaloader import Profile
-            
-            profile = Profile.from_username(self.L.context, username)
+            from instaloader import Profile, StoryItem
             
             self.L.dirname_pattern = str(temp_dir)
-            self.L.download_stories(userids=[profile.userid], target=username)
+            
+            # Try to download the specific story by media ID first
+            try:
+                story = StoryItem.from_mediaid(self.L.context, int(story_id))
+                self.L.download_storyitem(story, target=username)
+                print(f"✅ Downloaded specific story item {story_id}")
+            except Exception as inner_e:
+                print(f"⚠️ Specific story fetch failed: {inner_e}, trying all stories from user...")
+                profile = Profile.from_username(self.L.context, username)
+                self.L.download_stories(userids=[profile.userid], target=username)
             
             files = self._collect_files(temp_dir)
             if files:
@@ -285,10 +619,8 @@ class InstagramDownloader:
                 }
         except Exception as e:
             print(f"⚠️ Story download failed: {e}")
-            if self.yt_dlp_available:
-                return await self._download_with_ytdlp(url, temp_dir)
         
-        return {"success": False, "error": "Failed to download story"}
+        return {"success": False, "error": f"Failed to download story"}
 
 ig_downloader = InstagramDownloader()
 
