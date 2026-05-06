@@ -382,16 +382,63 @@ class InstagramDownloader:
             return False
     
     def _validate_session(self) -> bool:
-        """Check if the current session is actually valid by fetching own profile."""
+        """Check if the current session is valid for stories (strict check)."""
         try:
             from instaloader import Profile
+            # Strict: try fetching a profile AND its stories feed
+            # Basic profile fetch works with stale sessions, stories don't
             profile = Profile.from_username(self.L.context, IG_USERNAME)
-            # Try accessing a property that requires login
             _ = profile.userid
+            # Also verify sessionid cookie exists (required for stories)
+            session_cookies = self.L.context._session.cookies if hasattr(self.L.context, '_session') else None
+            if session_cookies:
+                has_sessionid = any(c.name == 'sessionid' for c in session_cookies)
+                if not has_sessionid:
+                    print("   No sessionid cookie found")
+                    return False
             return True
         except Exception as e:
             print(f"🔍 Session validation error: {e}")
             return False
+    
+    def _force_fresh_login(self):
+        """Delete old session and force a brand new login."""
+        session_file = BASE_DIR / f"session_{IG_USERNAME}"
+        print("🔄 Forcing fresh login...")
+        
+        # Delete old session
+        if session_file.exists():
+            try:
+                session_file.unlink()
+                print(f"   Deleted old session file: {session_file.name}")
+            except Exception as e:
+                print(f"   Could not delete session file: {e}")
+        
+        # Also delete cookies.txt
+        if COOKIE_FILE.exists():
+            try:
+                COOKIE_FILE.unlink()
+                print(f"   Deleted old cookies.txt")
+            except Exception:
+                pass
+        
+        # Try Playwright first, then direct login
+        if self._playwright_login():
+            self.L.save_session_to_file(str(session_file))
+            self._export_cookies_to_ytdlp()
+            return True
+        
+        if IG_USERNAME and IG_PASSWORD:
+            try:
+                self.L.login(IG_USERNAME, IG_PASSWORD)
+                self.L.save_session_to_file(str(session_file))
+                print("✅ Fresh direct login successful")
+                self._export_cookies_to_ytdlp()
+                return True
+            except Exception as e:
+                print(f"❌ Fresh direct login failed: {e}")
+        
+        return False
     
     def _export_cookies_to_ytdlp(self):
         """Export instaloader's live session cookies to a Netscape cookies.txt for yt-dlp."""
@@ -439,9 +486,13 @@ class InstagramDownloader:
         if self.is_story_url(url):
             temp_dir = TEMP_DIR / f"ig_{download_id}"
             temp_dir.mkdir(exist_ok=True)
-            # Try instaloader first (has valid session), fall back to yt-dlp
+            # Try instaloader first (has valid session)
             result = await self.download_story(url, download_id)
             if result.get("success"):
+                return result
+            # If instaloader failed with login error and we couldn't fix it, don't bother with yt-dlp
+            error_str = str(result.get("error", "")).lower()
+            if "login" in error_str or "session expired" in error_str:
                 return result
             if self.yt_dlp_available:
                 print("🔄 Story download via instaloader failed, trying yt-dlp...")
@@ -585,7 +636,7 @@ class InstagramDownloader:
             return (m.group(1), m.group(2))
         return None
 
-    async def download_story(self, url: str, download_id: str) -> dict:
+    async def download_story(self, url: str, download_id: str, allow_relogin: bool = True) -> dict:
         temp_dir = TEMP_DIR / f"ig_{download_id}"
         temp_dir.mkdir(exist_ok=True)
         
@@ -607,7 +658,18 @@ class InstagramDownloader:
                 self.L.download_storyitem(story, target=username)
                 print(f"✅ Downloaded specific story item {story_id}")
             except Exception as inner_e:
-                print(f"⚠️ Specific story fetch failed: {inner_e}, trying all stories from user...")
+                inner_err = str(inner_e).lower()
+                print(f"⚠️ Specific story fetch failed: {inner_e}")
+                
+                # Check if it's a login error
+                if any(x in inner_err for x in ['login', 'unauthorized', '401', '403', 'redirect']) and allow_relogin:
+                    print("   Detected login error. Forcing fresh login and retrying...")
+                    if self._force_fresh_login():
+                        return await self.download_story(url, download_id, allow_relogin=False)
+                    else:
+                        return {"success": False, "error": "Session expired. Fresh login failed."}
+                
+                print(f"   Trying all stories from user...")
                 profile = Profile.from_username(self.L.context, username)
                 self.L.download_stories(userids=[profile.userid], target=username)
             
@@ -618,9 +680,18 @@ class InstagramDownloader:
                     "caption": "", "author": username, "temp_dir": str(temp_dir)
                 }
         except Exception as e:
+            err_str = str(e).lower()
             print(f"⚠️ Story download failed: {e}")
+            
+            # Check if it's a login error and retry once
+            if any(x in err_str for x in ['login', 'unauthorized', '401', '403', 'redirect']) and allow_relogin:
+                print("   Detected login error. Forcing fresh login and retrying...")
+                if self._force_fresh_login():
+                    return await self.download_story(url, download_id, allow_relogin=False)
+                else:
+                    return {"success": False, "error": "Session expired. Fresh login failed."}
         
-        return {"success": False, "error": f"Failed to download story"}
+        return {"success": False, "error": "Failed to download story"}
 
 ig_downloader = InstagramDownloader()
 
