@@ -106,8 +106,6 @@ class InstagramDownloader:
                 print(f"⚠️ Session file is {age_hours:.1f} hours old. Deleting for fresh login...")
                 try:
                     session_file.unlink()
-                    if COOKIE_FILE.exists():
-                        COOKIE_FILE.unlink()
                 except Exception:
                     pass
         
@@ -118,7 +116,14 @@ class InstagramDownloader:
             self._export_cookies_to_ytdlp()
             return
         
-        # 2. Try to load saved session file
+        # 2. Try cookies.txt (manually exported or from extract_cookies.py)
+        if COOKIE_FILE.exists():
+            if self._load_cookies_txt():
+                print("✅ Logged in via cookies.txt")
+                self.L.save_session_to_file(str(session_file))
+                return
+        
+        # 3. Try to load saved session file
         if session_file.exists():
             try:
                 self.L.load_session_from_file(IG_USERNAME, str(session_file))
@@ -131,14 +136,14 @@ class InstagramDownloader:
             except Exception as e:
                 print(f"⚠️ Session file failed: {e}")
 
-        # 3. Try headless browser login
+        # 4. Try headless browser login
         if IG_USERNAME and IG_PASSWORD:
             if self._playwright_login():
                 self.L.save_session_to_file(str(session_file))
                 self._export_cookies_to_ytdlp()
                 return
 
-        # 4. Try regular login
+        # 5. Try regular login
         if IG_USERNAME and IG_PASSWORD:
             try:
                 print(f"🔑 Attempting direct API login for {IG_USERNAME}...")
@@ -235,8 +240,15 @@ class InstagramDownloader:
                 
                 # Check for 2FA / challenge / suspicious login
                 current_url = page.url
-                if any(x in current_url for x in ["challenge", "two_factor", "confirm_email", "suspicious"]):
-                    print("   ⚠️ Instagram requires 2FA/challenge. Complete it in a real browser first.")
+                page_html = page.content()
+                is_2fa = any(x in current_url for x in ["challenge", "two_factor", "confirm_email", "suspicious"])
+                is_2fa = is_2fa or "two-factor" in page_html.lower() or "authentication code" in page_html.lower()
+                if is_2fa:
+                    print("   ⚠️ Instagram requires 2FA!")
+                    print("   Automated login cannot handle 2FA. Please use one of these options:")
+                    print("      1. Run: python extract_cookies.py  (opens browser for manual login)")
+                    print("      2. Install browser_cookie3 and be logged into Instagram in Chrome/Edge")
+                    print("      3. Use a browser extension to export cookies.txt from Instagram")
                     browser.close()
                     return False
                 
@@ -391,6 +403,60 @@ class InstagramDownloader:
             return False
         except Exception as e:
             print(f"   Browser cookie load failed: {e}")
+            return False
+    
+    def _load_cookies_txt(self) -> bool:
+        """Load cookies from a Netscape cookies.txt file into instaloader session."""
+        try:
+            import http.cookiejar as cookiejar
+            import requests
+            
+            print("📄 Trying to load cookies from cookies.txt...")
+            
+            if not COOKIE_FILE.exists():
+                return False
+            
+            # Load Netscape cookie file
+            cj = cookiejar.MozillaCookieJar(str(COOKIE_FILE))
+            cj.load(ignore_discard=True, ignore_expires=True)
+            
+            ig_cookies = [c for c in cj if "instagram" in c.domain]
+            if len(ig_cookies) < 3:
+                print(f"   Only {len(ig_cookies)} Instagram cookies in file (need >= 3)")
+                return False
+            
+            print(f"   Found {len(ig_cookies)} Instagram cookies in cookies.txt")
+            
+            # Build requests session
+            session = requests.Session()
+            session.headers.update({
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                "Accept-Language": "en-US,en;q=0.9",
+            })
+            
+            for cookie in cj:
+                if "instagram" in cookie.domain:
+                    session.cookies.set(
+                        name=cookie.name,
+                        value=cookie.value,
+                        domain=cookie.domain,
+                        path=cookie.path or "/",
+                        secure=cookie.secure,
+                        expires=cookie.expires,
+                    )
+            
+            self.L.context._session = session
+            
+            if self._validate_session():
+                print("✅ cookies.txt loaded successfully")
+                return True
+            else:
+                print("⚠️ cookies.txt loaded but session invalid")
+                return False
+                
+        except Exception as e:
+            print(f"   cookies.txt load failed: {e}")
             return False
     
     def _validate_session(self) -> bool:
