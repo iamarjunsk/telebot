@@ -1,123 +1,108 @@
-import os, time, json, tempfile, subprocess, traceback, sys, shutil, sqlite3
+#!/usr/bin/env python3
+"""
+Instagram Cookie Refresher — cron-compatible version.
+Extracts fresh cookies from system browser and updates cookies.txt + instaloader session.
+"""
+
+import os
+import sys
+import time
+import json
+import traceback
 from pathlib import Path
-import browser_cookie3
 
 BASE_DIR = Path(__file__).parent
 COOKIE_FILE = BASE_DIR / "cookies.txt"
 SESSION_FILE = BASE_DIR / "session_halo_aju2_"
+MAX_AGE_HOURS = 4
 
-def log(msg):
-    print(msg, flush=True)
+def is_fresh():
+    """Check if cookies.txt exists and is fresh (< 4 hours old) with sessionid + ds_user_id."""
+    if not COOKIE_FILE.exists():
+        return False
+    
+    age_hours = (time.time() - COOKIE_FILE.stat().st_mtime) / 3600
+    if age_hours >= MAX_AGE_HOURS:
+        return False
+    
+    content = COOKIE_FILE.read_text()
+    has_sessionid = 'sessionid' in content
+    has_userid = 'ds_user_id' in content
+    
+    return has_sessionid and has_userid
 
-def main():
-    log("=" * 60)
-    log("INSTAGRAM COOKIE REFRESHER (cron mode)")
-    log("=" * 60)
-
-    # Step 1: Check if cookies.txt exists and is fresh (< 4 hours)
-    if COOKIE_FILE.exists():
-        age = time.time() - COOKIE_FILE.stat().st_mtime
-        age_hours = age / 3600
-        content = COOKIE_FILE.read_text()
-        has_sessionid = "sessionid" in content
-        has_userid = "ds_user_id" in content
-        log(f"cookies.txt exists, age: {age_hours:.2f} hours")
-        log(f"has sessionid: {has_sessionid}, has ds_user_id: {has_userid}")
-        if age < 4 * 3600 and has_sessionid and has_userid:
-            log("Cookies are fresh — validating...")
-            try:
-                import requests
-                cookies = {}
-                for line in content.splitlines():
-                    if line.startswith("#") or not line.strip():
-                        continue
-                    parts = line.split("\t")
-                    if len(parts) >= 7 and "instagram" in parts[0].lower():
-                        cookies[parts[5]] = parts[6]
-                headers = {
-                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-                    "X-IG-App-ID": "936619743392459",
-                    "Referer": "https://www.instagram.com/",
-                }
-                session = requests.Session()
-                session.headers.update(headers)
-                for name, value in cookies.items():
-                    session.cookies.set(name, value, domain=".instagram.com", path="/")
-                resp = session.get(
-                    "https://www.instagram.com/api/v1/users/web_profile_info/",
-                    params={"username": "instagram"},
-                    timeout=30,
-                )
-                if resp.status_code == 200:
-                    data = resp.json()
-                    user = data.get("data", {}).get("user", {})
-                    if user and user.get("id"):
-                        log(f"Validation passed: fetched user ID {user['id']}")
-                        log("RESULT: COOKIES_FRESH")
-                        return 0
-            except Exception as e:
-                log(f"Validation error: {e}")
-        log("Cookies are stale or missing key fields — will refresh")
-    else:
-        log("cookies.txt does not exist")
-
-    # Step 2: Try browser extraction
-    log("Step 2: Try browser extraction")
+def extract_browser_cookies():
+    """Extract Instagram cookies from Chrome/Edge/Firefox on Windows."""
+    try:
+        import browser_cookie3
+    except ImportError:
+        print("browser_cookie3 not installed. Run: pip install browser_cookie3")
+        return None
+    
     browsers = [
         ("Chrome", browser_cookie3.chrome),
         ("Edge", browser_cookie3.edge),
         ("Firefox", browser_cookie3.firefox),
     ]
-    cookies = None
+    
     for name, fn in browsers:
         try:
-            log(f"  Trying {name}...")
             jar = fn(domain_name="instagram.com")
             ig_cookies = [c for c in jar if "instagram" in c.domain]
+            
+            if not ig_cookies:
+                continue
+                
             names = {c.name for c in ig_cookies}
-            has_session = "sessionid" in names
-            has_userid = "ds_user_id" in names
-            log(f"    Found {len(ig_cookies)} cookies, sessionid={has_session}, ds_user_id={has_userid}")
+            has_session = 'sessionid' in names
+            has_userid = 'ds_user_id' in names
+            
             if has_session and has_userid:
-                log(f"    SUCCESS from {name}")
-                cookies = ig_cookies
-                break
+                print(f"✅ Extracted cookies from {name}")
+                return ig_cookies
+            else:
+                print(f"  {name}: missing sessionid or ds_user_id")
         except Exception as e:
-            log(f"    {name} failed: {e}")
+            print(f"  {name} failed: {e}")
+            continue
+    
+    print("❌ No browser had valid Instagram session cookies.")
+    return None
 
-    if not cookies:
-        log("  No browser had valid Instagram session cookies")
-        log("RESULT: BROWSER_EXTRACTION_FAILED")
-        return 1
-
-    # Step 3: Save cookies.txt
-    log("Step 3: Save cookies.txt")
+def save_cookies_txt(cookies):
+    """Save cookies in Netscape format."""
     lines = [
         "# Netscape HTTP Cookie File",
         "# Generated by refresh_cookies_cron.py",
     ]
+    
     for c in cookies:
         domain = c.domain if c.domain else ".instagram.com"
         flag = "TRUE" if domain.startswith(".") else "FALSE"
         path = c.path if c.path else "/"
-        secure = "TRUE" if getattr(c, "secure", True) else "FALSE"
+        secure = "TRUE" if getattr(c, 'secure', True) else "FALSE"
         expires = str(int(c.expires)) if c.expires else "0"
+        
         lines.append(f"{domain}\t{flag}\t{path}\t{secure}\t{expires}\t{c.name}\t{c.value}")
+    
     COOKIE_FILE.write_text("\n".join(lines))
-    log(f"  Saved {len(cookies)} cookies to {COOKIE_FILE}")
+    print(f"✅ Saved {len(cookies)} cookies to {COOKIE_FILE}")
 
-    # Step 4: Build instaloader session
-    log("Step 4: Build instaloader session")
+def build_instaloader_session(cookies):
+    """Create a requests session and save as instaloader session file."""
     try:
-        import requests as req_lib
+        import requests
         import instaloader
-        session = req_lib.Session()
+        
+        session = requests.Session()
         session.headers.update({
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
             "Accept-Language": "en-US,en;q=0.9",
+            "Accept-Encoding": "gzip, deflate, br",
             "Referer": "https://www.instagram.com/",
         })
+        
         for c in cookies:
             domain = c.domain if c.domain else ".instagram.com"
             session.cookies.set(
@@ -125,57 +110,107 @@ def main():
                 value=c.value,
                 domain=domain,
                 path=c.path if c.path else "/",
-                secure=getattr(c, "secure", True),
+                secure=getattr(c, 'secure', True),
                 expires=c.expires,
             )
+        
         L = instaloader.Instaloader()
         L.context._session = session
         L.save_session_to_file(str(SESSION_FILE))
-        log(f"  Saved instaloader session to {SESSION_FILE}")
+        
+        print(f"✅ Saved instaloader session to {SESSION_FILE}")
+        return True
     except Exception as e:
-        log(f"  Failed to build instaloader session: {e}")
+        print(f"❌ Failed to build instaloader session: {e}")
         traceback.print_exc()
+        return False
 
-    # Step 5: Validate
-    log("Step 5: Validate session")
+def validate_session():
+    """Validate by making a test GraphQL request to Instagram."""
     try:
         import requests
-        content = COOKIE_FILE.read_text()
+        
+        if not COOKIE_FILE.exists():
+            print("❌ No cookies.txt to validate")
+            return False
+        
         cookies = {}
-        for line in content.splitlines():
-            if line.startswith("#") or not line.strip():
+        for line in COOKIE_FILE.read_text().splitlines():
+            if line.startswith('#') or not line.strip():
                 continue
-            parts = line.split("\t")
-            if len(parts) >= 7 and "instagram" in parts[0].lower():
+            parts = line.split('\t')
+            if len(parts) >= 7 and 'instagram' in parts[0].lower():
                 cookies[parts[5]] = parts[6]
+        
+        if 'sessionid' not in cookies:
+            print("❌ No sessionid — validation impossible")
+            return False
+        
         headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
             "X-IG-App-ID": "936619743392459",
+            "X-ASBD-ID": "129477",
             "Referer": "https://www.instagram.com/",
         }
+        
         session = requests.Session()
         session.headers.update(headers)
         for name, value in cookies.items():
             session.cookies.set(name, value, domain=".instagram.com", path="/")
+        
         resp = session.get(
             "https://www.instagram.com/api/v1/users/web_profile_info/",
             params={"username": "instagram"},
-            timeout=30,
+            timeout=30
         )
+        
         if resp.status_code == 200:
             data = resp.json()
             user = data.get("data", {}).get("user", {})
             if user and user.get("id"):
-                log(f"Validation passed: fetched user ID {user['id']}")
-                log("RESULT: COOKIES_REFRESHED_SUCCESSFULLY")
-                return 0
-        log(f"Validation failed: HTTP {resp.status_code}")
-        log("RESULT: VALIDATION_FAILED")
-        return 1
+                print(f"✅ Session validated — fetched user ID {user['id']}")
+                return True
+        
+        print(f"❌ Validation failed: HTTP {resp.status_code}")
+        return False
     except Exception as e:
-        log(f"Validation error: {e}")
-        log("RESULT: VALIDATION_FAILED")
+        print(f"❌ Validation error: {e}")
+        return False
+
+def main():
+    print("=" * 60)
+    print("INSTAGRAM COOKIE REFRESHER (cron)")
+    print("=" * 60)
+    
+    # Step 1: Check if cookies are already fresh
+    if is_fresh():
+        print(f"✅ cookies.txt is fresh (< {MAX_AGE_HOURS} hours old)")
+        validate_session()
+        print("\n[SILENT] — cookies already fresh, nothing to do")
+        return 0
+    
+    print("⚠️  cookies.txt is stale or missing. Attempting browser extraction...")
+    
+    # Step 2: Extract from browser
+    cookies = extract_browser_cookies()
+    if not cookies:
+        print("\n⚠️  WARNING: Browser extraction failed. Manual login required.")
+        print("   Please run the interactive script as admin:")
+        print("   python refresh_cookies.py")
         return 1
+    
+    # Step 3: Save cookies.txt
+    save_cookies_txt(cookies)
+    
+    # Step 4: Build instaloader session
+    build_instaloader_session(cookies)
+    
+    # Step 5: Validate
+    print()
+    validate_session()
+    
+    print("\n✅ Cookies refreshed successfully.")
+    return 0
 
 if __name__ == "__main__":
     sys.exit(main())
